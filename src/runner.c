@@ -260,11 +260,6 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   ip_flag = tumgrd_ip_version_flag(node->ip_version);
   snprintf(server_port, sizeof(server_port), "%d", node->server_port);
 
-  /*
-   * 对齐 Go:
-   *   exec.CommandContext(ctx, bin, args...)
-   * 实际 argv[0] 一定是程序名
-   */
   argv[argc++] = TUMGRD_TUCTL_CLIENT_BIN;
 
   if (ip_flag) {
@@ -412,9 +407,7 @@ int tumgrd_runner_client_del(const struct tumgrd_node *node) {
 }
 
 int tumgrd_runner_reset_local_client(const struct tumgrd_node *node) {
-  /*
-   * 与 Go 版一致：client-del 失败忽略
-   */
+  // client-del 失败忽略
   (void) tumgrd_runner_client_del(node);
   return tumgrd_runner_client_add(node);
 }

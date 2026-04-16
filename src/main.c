@@ -28,7 +28,7 @@ static void tumgrd_signal_handler(int signo) {
 
 int main(int argc, char **argv) {
   const char *db_path = TUMGRD_DB_PATH;
-  int         rc      = 1;
+  int         err     = 1;
 
   if (argc > 1 && argv[1] && argv[1][0] != '\0') {
     db_path = argv[1];
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   fprintf(stderr, "[main] tumgrd started\n");
   uloop_run();
 
-  rc = 0;
+  err = 0;
 
 out_ubus:
   tumgrd_ubus_cleanup();
@@ -89,5 +89,5 @@ out_db:
 
 out_uloop:
   uloop_done();
-  return rc;
+  return err;
 }
