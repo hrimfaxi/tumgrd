@@ -1,0 +1,13 @@
+.venv
+.venv-pypy3
+.python-version
+__pycache__
+tags
+
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+*.o
+
+*.rej
+compile_commands.json
