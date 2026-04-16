@@ -88,80 +88,30 @@ static void tumgrd_add_node_brief(struct blob_buf *b, const struct tumgrd_node *
 }
 
 /*
- * 优先按真实主键 (server_host, server_port, uid) 查。
- * 如果没给 server_port，但给了 client_port，则 fallback 扫描列表：
- *   仅当 (server_host, uid, client_port) 恰好命中 1 条时视为成功。
+ * 按真实主键 (server_host, server_port, uid) 查找节点。
  *
  * 返回：
  *   0  成功
  *   1  未找到
- *   2  歧义（命中多条）
- *  -1  数据库错误
+ *  -1  数据库错误 / 参数错误
  */
-static int tumgrd_resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, bool has_server_port,
-                               int server_port, bool has_client_port, int client_port, struct tumgrd_node *out) {
+static int tumgrd_resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, int server_port,
+                               struct tumgrd_node *out) {
   int rc;
 
   if (!db || !uid || !server_host || !out) {
     return -1;
   }
 
-  if (has_server_port) {
-    rc = tumgrd_db_get_node(db, server_host, server_port, uid, out);
-    if (rc == 0) {
-      return 0;
-    }
-    if (rc == 1) {
-      return 1;
-    }
-    return -1;
+  rc = tumgrd_db_get_node(db, server_host, server_port, uid, out);
+  if (rc == 0) {
+    return 0;
   }
-
-  if (!has_client_port) {
+  if (rc == 1) {
     return 1;
   }
 
-  {
-    struct tumgrd_node *nodes = NULL;
-    size_t              count = 0;
-    size_t              i;
-    int                 matches = 0;
-    struct tumgrd_node  found;
-
-    memset(&found, 0, sizeof(found));
-
-    rc = tumgrd_db_list_nodes(db, &nodes, &count);
-    if (rc != 0) {
-      return -1;
-    }
-
-    for (i = 0; i < count; i++) {
-      if (strcmp(nodes[i].uid, uid) != 0) {
-        continue;
-      }
-      if (strcmp(nodes[i].server_host, server_host) != 0) {
-        continue;
-      }
-      if (nodes[i].client_port != client_port) {
-        continue;
-      }
-
-      found = nodes[i];
-      matches++;
-    }
-
-    tumgrd_db_free_nodes(nodes);
-
-    if (matches == 0) {
-      return 1;
-    }
-    if (matches > 1) {
-      return 2;
-    }
-
-    *out = found;
-    return 0;
-  }
+  return -1;
 }
 
 /* =========================================================================
@@ -286,21 +236,18 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
  * 2. deregister
  * ========================================================================= */
 
-enum { DEREG_UID, DEREG_SERVER_HOST, DEREG_SERVER_PORT, DEREG_CLIENT_PORT, __DEREG_MAX };
+enum { DEREG_UID, DEREG_SERVER_HOST, DEREG_SERVER_PORT, __DEREG_MAX };
 
 static const struct blobmsg_policy dereg_policy[__DEREG_MAX] = {
   [DEREG_UID]         = {.name = "uid", .type = BLOBMSG_TYPE_STRING},
   [DEREG_SERVER_HOST] = {.name = "server_host", .type = BLOBMSG_TYPE_STRING},
   [DEREG_SERVER_PORT] = {.name = "server_port", .type = BLOBMSG_TYPE_INT32},
-  [DEREG_CLIENT_PORT] = {.name = "client_port", .type = BLOBMSG_TYPE_INT32},
 };
 
 static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, struct ubus_request_data *req,
                              const char *method, struct blob_attr *msg) {
   struct blob_attr  *tb[__DEREG_MAX];
   struct tumgrd_node node;
-  bool               has_server_port;
-  bool               has_client_port;
   int                resolve_rc;
   int                rc_server;
   int                rc_client;
@@ -316,24 +263,18 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   blobmsg_parse(dereg_policy, __DEREG_MAX, tb, blob_data(msg), blob_len(msg));
 
-  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST]) {
+  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST] || !tb[DEREG_SERVER_PORT]) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  has_server_port = tb[DEREG_SERVER_PORT] != NULL;
-  has_client_port = tb[DEREG_CLIENT_PORT] != NULL;
-
   resolve_rc = tumgrd_resolve_node(g_db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
-                                   has_server_port, has_server_port ? (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]) : 0,
-                                   has_client_port, has_client_port ? (int) blobmsg_get_u32(tb[DEREG_CLIENT_PORT]) : 0, &node);
+                                   (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), &node);
+
   if (resolve_rc == 1) {
     tumgrd_reply_simple(ctx, req, "not_found", "node not found");
     return UBUS_STATUS_OK;
   }
-  if (resolve_rc == 2) {
-    tumgrd_reply_simple(ctx, req, "ambiguous", "multiple nodes matched; please provide server_port");
-    return UBUS_STATUS_OK;
-  }
+
   if (resolve_rc != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -368,13 +309,12 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
  * 3. refresh
  * ========================================================================= */
 
-enum { REF_UID, REF_SERVER_HOST, REF_SERVER_PORT, REF_CLIENT_PORT, REF_FORCE, REF_ALL, __REF_MAX };
+enum { REF_UID, REF_SERVER_HOST, REF_SERVER_PORT, REF_FORCE, REF_ALL, __REF_MAX };
 
 static const struct blobmsg_policy ref_policy[__REF_MAX] = {
   [REF_UID]         = {.name = "uid", .type = BLOBMSG_TYPE_STRING},
   [REF_SERVER_HOST] = {.name = "server_host", .type = BLOBMSG_TYPE_STRING},
   [REF_SERVER_PORT] = {.name = "server_port", .type = BLOBMSG_TYPE_INT32},
-  [REF_CLIENT_PORT] = {.name = "client_port", .type = BLOBMSG_TYPE_INT32},
   [REF_FORCE]       = {.name = "force", .type = BLOBMSG_TYPE_BOOL},
   [REF_ALL]         = {.name = "all", .type = BLOBMSG_TYPE_BOOL},
 };
@@ -413,33 +353,25 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     return UBUS_STATUS_OK;
   }
 
-  if (!tb[REF_UID] || !tb[REF_SERVER_HOST]) {
+  if (!tb[REF_UID] || !tb[REF_SERVER_HOST] || !tb[REF_SERVER_PORT]) {
     blob_buf_free(&b);
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
   {
     struct tumgrd_node node;
-    bool               has_server_port = tb[REF_SERVER_PORT] != NULL;
-    bool               has_client_port = tb[REF_CLIENT_PORT] != NULL;
     int                resolve_rc;
 
     resolve_rc = tumgrd_resolve_node(g_db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
-                                     has_server_port, has_server_port ? (int) blobmsg_get_u32(tb[REF_SERVER_PORT]) : 0,
-                                     has_client_port, has_client_port ? (int) blobmsg_get_u32(tb[REF_CLIENT_PORT]) : 0, &node);
+                                     (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), &node);
+
     if (resolve_rc == 1) {
       blobmsg_add_string(&b, "status", "not_found");
       ubus_send_reply(ctx, req, b.head);
       blob_buf_free(&b);
       return UBUS_STATUS_OK;
     }
-    if (resolve_rc == 2) {
-      blobmsg_add_string(&b, "status", "ambiguous");
-      blobmsg_add_string(&b, "message", "multiple nodes matched; please provide server_port");
-      ubus_send_reply(ctx, req, b.head);
-      blob_buf_free(&b);
-      return UBUS_STATUS_OK;
-    }
+
     if (resolve_rc != 0) {
       blob_buf_free(&b);
       return UBUS_STATUS_UNKNOWN_ERROR;

@@ -39,10 +39,10 @@ ubus -s /tmp/ubus.sock call tumgrd status
 刷新
 ```
 ubus -s /tmp/ubus.sock call tumgrd refresh '{"all":true, "force": true}'
-ubus -s /tmp/ubus.sock call tumgrd refresh '{"uid":"x1", "server_host":"a.com", "client_port":1443, "force":true}'
+ubus -s /tmp/ubus.sock call tumgrd refresh '{"uid":"x1", "server_host":"a.com", "server_port":1443, "force":true}'
 ```
 
 反注册:
 ```
-ubus -s /tmp/ubus.sock call tumgrd deregister '{"uid":"x1", "server_host":"a.com", "client_port":1443}'
+ubus -s /tmp/ubus.sock call tumgrd deregister '{"uid":"x1", "server_host":"a.com", "server_port":1443}'
 ```
