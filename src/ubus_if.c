@@ -54,6 +54,7 @@ static void tumgrd_add_node_brief(struct blob_buf *b, const struct tumgrd_node *
   blobmsg_add_string(b, "uid", n->uid);
   blobmsg_add_string(b, "server_host", n->server_host);
   blobmsg_add_u32(b, "server_port", (uint32_t) n->server_port);
+  blobmsg_add_string(b, "psk", n->psk);
   blobmsg_add_u32(b, "client_port", (uint32_t) n->client_port);
 
   if (n->description[0] != '\0') {
