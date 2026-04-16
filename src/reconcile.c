@@ -97,15 +97,15 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
   struct tumgrd_node *nodes = NULL;
   size_t              count = 0;
   size_t              i;
-  int                 rc;
+  int                 err;
   int                 failed = 0;
 
   if (!db) {
     return -1;
   }
 
-  rc = tumgrd_db_list_nodes(db, &nodes, &count);
-  if (rc != 0) {
+  err = tumgrd_db_list_nodes(db, &nodes, &count);
+  if (err != 0) {
     log_error("[reconcile] list nodes failed");
     return -1;
   }
