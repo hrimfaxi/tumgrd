@@ -64,5 +64,5 @@ target_include_directories(tumgrd PRIVATE
 target_link_libraries(tumgrd PRIVATE
     ${UBOX_LIBRARY}
     ${UBUS_LIBRARY}
-    SQLite::SQLite3
+    SQLite3::SQLite3
 )
