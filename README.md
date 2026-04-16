@@ -29,7 +29,7 @@ SET(UBUS_UNIX_SOCKET "/tmp/ubus.sock")
 注册
 ```
 ```
-ubus -s /tmp/ubus.sock call tumgrd register '{"uid": "my-node-01", "server_host": "192.168.1.100", "client_port": 1443, "server_port": 14801, "psk": "scinfaxi" }'
+ubus -s /tmp/ubus.sock call tumgrd register '{"uid": "my-node-01", "server_host": "192.168.1.100", "client_port": 1443, "server_port": 14801, "psk": "scinfaxi", "memlimit": 1024768, "description": "server", "client_comment": "my-node-01" }'
 
 状态
 ```
