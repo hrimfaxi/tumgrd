@@ -269,7 +269,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    * register 后立刻应用配置。
    * 失败时仍保留 DB 中的 desired state，方便后续自愈。
    */
-  rc = tumgrd_reconcile_one(g_db, &node);
+  rc = tumgrd_reconcile_one(g_db, &node, true);
 
   blob_buf_init(&b, 0);
   blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "stored_but_apply_failed");
@@ -402,12 +402,11 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   blob_buf_init(&b, 0);
 
   if (is_all) {
-    rc = tumgrd_reconcile_all(g_db);
+    rc = tumgrd_reconcile_all(g_db, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "partial_error");
     blobmsg_add_string(&b, "scope", "all");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
-    blobmsg_add_string(&b, "note", "force accepted for compatibility; current reconcile path is always full apply");
 
     ubus_send_reply(ctx, req, b.head);
     blob_buf_free(&b);
@@ -446,7 +445,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
       return UBUS_STATUS_UNKNOWN_ERROR;
     }
 
-    rc = tumgrd_reconcile_one(g_db, &node);
+    rc = tumgrd_reconcile_one(g_db, &node, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");

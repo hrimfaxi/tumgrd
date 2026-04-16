@@ -18,7 +18,7 @@ static struct uloop_timeout g_reconcile_timer;
 
 static void tumgrd_reconcile_timer_cb(struct uloop_timeout *t) {
   (void) t;
-  (void) tumgrd_reconcile_all(&g_db);
+  (void) tumgrd_reconcile_all(&g_db, true);
 }
 
 static void tumgrd_signal_handler(int signo) {
