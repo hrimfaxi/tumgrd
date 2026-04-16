@@ -1,4 +1,5 @@
 #include "ipdetect.h"
+#include "log.h"
 #include "tumgrd.h"
 
 #include <arpa/inet.h>
@@ -242,7 +243,7 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
     }
   }
 
-  fprintf(stderr, "[ipdetect] failed url=%s ip_version=%s\n", final_url, ip_version ? ip_version : "");
+  log_error("[ipdetect] failed url=%s ip_version=%s", final_url, ip_version ? ip_version : "");
 
   return -1;
 }

@@ -1,4 +1,5 @@
 #include "runner.h"
+#include "log.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -283,8 +284,8 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   rc = tumgrd_exec_with_stdio(argv, script, node->has_memlimit, node->memlimit, stdout_buf, sizeof(stdout_buf), stderr_buf,
                               sizeof(stderr_buf));
 
-  fprintf(stderr, "[runner] tuctl_client uid=%s server=%s:%d client_port=%d rc=%d stdout=%s stderr=%s\n", node->uid,
-          node->server_host, node->server_port, node->client_port, rc, stdout_buf, stderr_buf);
+  log_info("[runner] tuctl_client uid=%s server=%s:%d client_port=%d rc=%d stdout=%s stderr=%s", node->uid, node->server_host,
+           node->server_port, node->client_port, rc, stdout_buf, stderr_buf);
 
   if (rc != 0) {
     return -1;
@@ -292,7 +293,7 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
 
   if (success_marker && success_marker[0] != '\0') {
     if (!strstr(stdout_buf, success_marker) && !strstr(stderr_buf, success_marker)) {
-      fprintf(stderr, "[runner] success marker missing: marker=%s\n", success_marker);
+      log_error("[runner] success marker missing: marker=%s", success_marker);
       return -1;
     }
   }
@@ -309,7 +310,7 @@ static int tumgrd_run_ktuctl(char *const argv[]) {
 
   rc = tumgrd_exec_with_stdio(argv, NULL, 0, 0, stdout_buf, sizeof(stdout_buf), stderr_buf, sizeof(stderr_buf));
 
-  fprintf(stderr, "[runner] ktuctl rc=%d stdout=%s stderr=%s\n", rc, stdout_buf, stderr_buf);
+  log_info("[runner] ktuctl rc=%d stdout=%s stderr=%s", rc, stdout_buf, stderr_buf);
 
   return rc;
 }
@@ -331,6 +332,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     snprintf(script, sizeof(script), "server-add uid %s port %d address %s\n", node->uid, node->client_port, current_ip);
   }
 
+  log_info("[runner] server add stdin: %s", script);
   return tumgrd_run_tuctl_script(node, script, "server updated:");
 }
 
@@ -342,6 +344,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
   }
 
   snprintf(script, sizeof(script), "server-del uid %s\n", node->uid);
+  log_info("[runner] server del stdin: %s", script);
 
   return tumgrd_run_tuctl_script(node, script, "server deleted:");
 }

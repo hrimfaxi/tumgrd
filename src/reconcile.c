@@ -1,6 +1,7 @@
 #include "reconcile.h"
 
 #include "ipdetect.h"
+#include "log.h"
 #include "runner.h"
 #include "tumgrd.h"
 
@@ -41,18 +42,18 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
 
   now = tumgrd_now_unix();
 
-  fprintf(stderr, "[reconcile] start uid=%s server=%s:%d client_port=%d force=%d old_ip=%s\n", node->uid, node->server_host,
-          node->server_port, node->client_port, force ? 1 : 0, node->current_ip);
+  log_info("[reconcile] start uid=%s server=%s:%d client_port=%d force=%d old_ip=%s", node->uid, node->server_host,
+           node->server_port, node->client_port, force ? 1 : 0, node->current_ip);
 
   ret = tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_SYNCING, now);
   if (ret != 0) {
-    fprintf(stderr, "[reconcile] failed to mark syncing uid=%s\n", node->uid);
+    log_error("[reconcile] failed to mark syncing uid=%s", node->uid);
     return -1;
   }
 
   ret = tumgrd_detect_public_ip(tumgrd_pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip));
   if (ret != 0) {
-    fprintf(stderr, "[reconcile] detect ip failed uid=%s\n", node->uid);
+    log_error("[reconcile] detect ip failed uid=%s", node->uid);
     tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
     return -1;
   }
@@ -60,34 +61,34 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
   ip_changed = strcmp(node->current_ip, detected_ip) != 0;
   need_apply = force || ip_changed;
 
-  fprintf(stderr, "[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d need_apply=%d\n", node->uid, detected_ip,
-          node->current_ip, ip_changed ? 1 : 0, need_apply ? 1 : 0);
+  log_info("[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d need_apply=%d", node->uid, detected_ip, node->current_ip,
+           ip_changed ? 1 : 0, need_apply ? 1 : 0);
 
   if (need_apply) {
     ret = tumgrd_runner_server_add(node, detected_ip);
     if (ret != 0) {
-      fprintf(stderr, "[reconcile] server-add failed uid=%s ip=%s\n", node->uid, detected_ip);
+      log_error("[reconcile] server-add failed uid=%s ip=%s", node->uid, detected_ip);
       tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
       return -1;
     }
 
     ret = tumgrd_runner_reset_local_client(node);
     if (ret != 0) {
-      fprintf(stderr, "[reconcile] reset local client failed uid=%s\n", node->uid);
+      log_error("[reconcile] reset local client failed uid=%s", node->uid);
       tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
       return -1;
     }
   } else {
-    fprintf(stderr, "[reconcile] skip apply uid=%s ip unchanged and force=0\n", node->uid);
+    log_info("[reconcile] skip apply uid=%s ip unchanged and force=0", node->uid);
   }
 
   ret = tumgrd_mark_runtime(db, node, detected_ip, TUMGRD_STATUS_ACTIVE, tumgrd_now_unix());
   if (ret != 0) {
-    fprintf(stderr, "[reconcile] update runtime failed uid=%s ip=%s\n", node->uid, detected_ip);
+    log_error("[reconcile] update runtime failed uid=%s ip=%s", node->uid, detected_ip);
     return -1;
   }
 
-  fprintf(stderr, "[reconcile] success uid=%s ip=%s applied=%d\n", node->uid, detected_ip, need_apply ? 1 : 0);
+  log_info("[reconcile] success uid=%s ip=%s applied=%d", node->uid, detected_ip, need_apply ? 1 : 0);
 
   return 0;
 }
@@ -105,11 +106,11 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
 
   rc = tumgrd_db_list_nodes(db, &nodes, &count);
   if (rc != 0) {
-    fprintf(stderr, "[reconcile] list nodes failed\n");
+    log_error("[reconcile] list nodes failed");
     return -1;
   }
 
-  fprintf(stderr, "[reconcile] reconcile_all count=%zu force=%d\n", count, force ? 1 : 0);
+  log_info("[reconcile] reconcile_all count=%zu force=%d", count, force ? 1 : 0);
 
   for (i = 0; i < count; i++) {
     if (tumgrd_reconcile_one(db, &nodes[i], force) != 0) {
@@ -120,10 +121,10 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
   tumgrd_db_free_nodes(nodes);
 
   if (failed != 0) {
-    fprintf(stderr, "[reconcile] reconcile_all done with failures=%d\n", failed);
+    log_error("[reconcile] reconcile_all done with failures=%d", failed);
     return -1;
   }
 
-  fprintf(stderr, "[reconcile] reconcile_all done\n");
+  log_info("[reconcile] reconcile_all done");
   return 0;
 }

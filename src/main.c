@@ -1,4 +1,5 @@
 #include "db.h"
+#include "log.h"
 #include "reconcile.h"
 #include "tumgrd.h"
 #include "ubus_if.h"
@@ -22,7 +23,6 @@ static void tumgrd_reconcile_timer_cb(struct uloop_timeout *t) {
 }
 
 static void tumgrd_signal_handler(int signo) {
-  fprintf(stderr, "[main] received signal %d, exiting\n", signo);
   uloop_end();
 }
 
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
   memset(&g_reconcile_timer, 0, sizeof(g_reconcile_timer));
 
   if (uloop_init() != 0) {
-    fprintf(stderr, "[main] uloop_init failed\n");
+    log_error("[main] uloop_init failed");
     return 1;
   }
 
@@ -46,32 +46,32 @@ int main(int argc, char **argv) {
   signal(SIGTERM, tumgrd_signal_handler);
 
   if (tumgrd_db_open(&g_db, db_path) != 0) {
-    fprintf(stderr, "[main] open db failed: %s\n", db_path);
+    log_error("[main] open db failed: %s", db_path);
     goto out_uloop;
   }
 
   if (tumgrd_db_init_schema(&g_db) != 0) {
-    fprintf(stderr, "[main] init schema failed\n");
+    log_error("[main] init schema failed");
     goto out_db;
   }
 
   g_ubus = ubus_connect(NULL);
   if (!g_ubus) {
-    fprintf(stderr, "[main] ubus_connect failed\n");
+    log_error("[main] ubus_connect failed");
     goto out_db;
   }
 
   ubus_add_uloop(g_ubus);
 
   if (tumgrd_ubus_init(g_ubus, &g_db) != 0) {
-    fprintf(stderr, "[main] tumgrd_ubus_init failed\n");
+    log_error("[main] tumgrd_ubus_init failed");
     goto out_ubus;
   }
 
   g_reconcile_timer.cb = tumgrd_reconcile_timer_cb;
   uloop_timeout_set(&g_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
 
-  fprintf(stderr, "[main] tumgrd started\n");
+  log_info("[main] tumgrd started");
   uloop_run();
 
   err = 0;

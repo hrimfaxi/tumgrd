@@ -1,4 +1,5 @@
 #include "db.h"
+#include "log.h"
 #include "tumgrd.h"
 
 #include <errno.h>
@@ -35,7 +36,7 @@ static const char *tumgrd_nonempty_or_null(const char *s) {
 }
 
 static void tumgrd_sqlite_log_error(sqlite3 *conn, const char *where, int rc) {
-  fprintf(stderr, "[db] %s failed: rc=%d msg=%s\n", where, rc, conn ? sqlite3_errmsg(conn) : "no sqlite handle");
+  log_error("[db] %s failed: rc=%d msg=%s", where, rc, conn ? sqlite3_errmsg(conn) : "no sqlite handle");
 }
 
 static int tumgrd_bind_text_or_null(sqlite3_stmt *stmt, int idx, const char *value) {
@@ -184,7 +185,7 @@ int tumgrd_db_open(struct tumgrd_db *db, const char *path) {
   tumgrd_copy_string(db->path, sizeof(db->path), db_path);
 
   if (tumgrd_ensure_parent_dir(db->path) != 0) {
-    fprintf(stderr, "[db] ensure parent dir failed for %s: %s\n", db->path, strerror(errno));
+    log_error("[db] ensure parent dir failed for %s: %s", db->path, strerror(errno));
     return -1;
   }
 
@@ -232,7 +233,7 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
 
   rc = sqlite3_exec(db->conn, sql, NULL, NULL, &errmsg);
   if (rc != SQLITE_OK) {
-    fprintf(stderr, "[db] init schema failed: rc=%d msg=%s\n", rc, errmsg ? errmsg : "unknown");
+    log_error("[db] init schema failed: rc=%d msg=%s", rc, errmsg ? errmsg : "unknown");
     sqlite3_free(errmsg);
     return -1;
   }
@@ -471,7 +472,7 @@ int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_
 
         new_arr = realloc(arr, new_cap * sizeof(*arr));
         if (!new_arr) {
-          fprintf(stderr, "[db] realloc failed in list_nodes\n");
+          log_error("[db] realloc failed in list_nodes");
           sqlite3_finalize(stmt);
           free(arr);
           return -1;
@@ -482,7 +483,7 @@ int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_
       }
 
       if (tumgrd_row_to_node(stmt, &arr[n]) != 0) {
-        fprintf(stderr, "[db] row_to_node failed in list_nodes\n");
+        log_error("[db] row_to_node failed in list_nodes");
         sqlite3_finalize(stmt);
         free(arr);
         return -1;
