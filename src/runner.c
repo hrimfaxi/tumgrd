@@ -284,6 +284,8 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   rc = tumgrd_exec_with_stdio(argv, script, node->has_memlimit, node->memlimit, stdout_buf, sizeof(stdout_buf), stderr_buf,
                               sizeof(stderr_buf));
 
+  tumgrd_trim_inplace(stdout_buf);
+  tumgrd_trim_inplace(stderr_buf);
   log_info("[runner] tuctl_client uid=%s server=%s:%d client_port=%d rc=%d stdout=%s stderr=%s", node->uid, node->server_host,
            node->server_port, node->client_port, rc, stdout_buf, stderr_buf);
 
@@ -310,6 +312,8 @@ static int tumgrd_run_ktuctl(char *const argv[]) {
 
   rc = tumgrd_exec_with_stdio(argv, NULL, 0, 0, stdout_buf, sizeof(stdout_buf), stderr_buf, sizeof(stderr_buf));
 
+  tumgrd_trim_inplace(stdout_buf);
+  tumgrd_trim_inplace(stderr_buf);
   log_info("[runner] ktuctl rc=%d stdout=%s stderr=%s", rc, stdout_buf, stderr_buf);
 
   return rc;
@@ -332,7 +336,14 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     snprintf(script, sizeof(script), "server-add uid %s port %d address %s\n", node->uid, node->client_port, current_ip);
   }
 
-  log_info("[runner] server add stdin: %s", script);
+  {
+    char *temp = strdup(script);
+    if (temp) {
+      tumgrd_trim_inplace(temp);
+      log_info("[runner] server add stdin: %s", temp);
+    }
+    free(temp);
+  }
   return tumgrd_run_tuctl_script(node, script, "server updated:");
 }
 
@@ -344,7 +355,15 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
   }
 
   snprintf(script, sizeof(script), "server-del uid %s\n", node->uid);
-  log_info("[runner] server del stdin: %s", script);
+
+  {
+    char *temp = strdup(script);
+    if (temp) {
+      tumgrd_trim_inplace(temp);
+      log_info("[runner] server del stdin: %s", temp);
+    }
+    free(temp);
+  }
 
   return tumgrd_run_tuctl_script(node, script, "server deleted:");
 }
@@ -414,3 +433,5 @@ int tumgrd_runner_reset_local_client(const struct tumgrd_node *node) {
   (void) tumgrd_runner_client_del(node);
   return tumgrd_runner_client_add(node);
 }
+
+// vim: set sw=2 ts=2 et:
