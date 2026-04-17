@@ -27,6 +27,10 @@ static struct ubus_context *g_ubus = NULL;
 static struct uloop_timeout g_startup_reconcile_timer;
 static struct uloop_timeout g_periodic_reconcile_timer;
 
+static inline const char *nonempty_or_default(const char *input, const char *def_str) {
+  return input ? input : def_str;
+}
+
 static void tumgrd_config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->db_path      = TUMGRD_DB_PATH;
@@ -47,8 +51,8 @@ static void usage(FILE *out, const char *prog) {
           "      --client-bin PATH    path to tuctl_client binary (default: %s)\n"
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "  -h, --help               show this help\n",
-          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, DEFAULT_SOCKET_PATH == NULL ? "null" : DEFAULT_SOCKET_PATH,
-          DEFAULT_CLIENT_BIN, DEFAULT_LOG_LEVEL);
+          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_CLIENT_BIN,
+          DEFAULT_LOG_LEVEL);
 }
 
 static int parse_interval(const char *s, int *out) {
@@ -174,7 +178,7 @@ int main(int argc, char **argv) {
   }
   try2(err, "[main] parse_args failed");
   try2(parse_log_level(cfg.log_level, &log_verbosity), "invalid log level: %s (expected: error, warn, info, debug, trace)",
-       cfg.log_level ? cfg.log_level : "(null)");
+       nonempty_or_default(cfg.log_level, "(null)"));
 
   memset(&g_ctx, 0, sizeof(g_ctx));
   g_ctx.cfg = cfg;
@@ -201,8 +205,8 @@ int main(int argc, char **argv) {
   uloop_timeout_set(&g_startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
   uloop_timeout_set(&g_periodic_reconcile_timer, g_ctx.cfg.interval_sec * 1000);
   log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
-           cfg.db_path ? cfg.db_path : "(null)", cfg.socket_path ? cfg.socket_path : "(default)", cfg.interval_sec,
-           cfg.log_level ? cfg.log_level : "(null)", cfg.client_bin ? cfg.client_bin : "(null)");
+           nonempty_or_default(cfg.db_path, "(null)"), nonempty_or_default(cfg.socket_path, "(default)"), cfg.interval_sec,
+           nonempty_or_default(cfg.log_level, "(null)"), nonempty_or_default(cfg.client_bin, "(null)"));
 
   uloop_run();
 
