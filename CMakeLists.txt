@@ -65,7 +65,7 @@ target_include_directories(tumgrd PRIVATE
 target_link_libraries(tumgrd PRIVATE
   ${UBOX_LIBRARY}
   ${UBUS_LIBRARY}
-  SQLite3::SQLite3
+  SQLite::SQLite3
 )
 
 # vim: set sw=2 ts=2 et:
