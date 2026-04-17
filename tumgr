@@ -6,10 +6,11 @@ UBUS_OBJECT="${UBUS_OBJECT:-tumgrd}"
 usage() {
 	cat <<'EOF'
 Usage:
-  tumgr register -uid <uid> -server-host <host> -server-port <port> -client-port <port> -psk <psk> [-memlimit <n>] [-description <text>] [-ip-check-url <url>] [-socket <path>]
+  tumgr register -uid <uid> -server-host <host> -server-port <port> -client-port <port> -psk <psk> [-memlimit <n>] [-description <text>] [-ip-check-url <url>] [-ip-version <ipv4|ipv6>] [-socket <path>]
   tumgr deregister -uid <uid> -server-host <host> -server-port <port> [-socket <path>]
   tumgr refresh -uid <uid> -server-host <host> -server-port <port> [-force] [-socket <path>]
-  tumgr status [-socket <path>]
+  tumgr refresh -all [-force] [-socket <path>]
+  tumgr status [-json] [-socket <path>]
   tumgr dump [-socket <path>]
 EOF
 	exit 1
@@ -39,9 +40,9 @@ is_uint() {
 
 json_escape() {
 	printf '%s' "$1" | sed \
-		-e 's/\\/\\\\/g' \
-		-e 's/"/\\"/g' \
-		-e ':a;N;$!ba;s/\n/\\n/g'
+	-e 's/\\/\\\\/g' \
+	-e 's/"/\\"/g' \
+	-e ':a;N;$!ba;s/\n/\\n/g'
 }
 
 ubus_call() {
@@ -59,51 +60,57 @@ cmd_register() {
 	memlimit=""
 	description=""
 	ip_check_url=""
+	ip_version=""
 	socket_path=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-uid)
+			-uid|-u)
 				[ $# -ge 2 ] || err "option -uid requires an argument"
 				uid="$2"
 				shift 2
 				;;
-			-server-host)
+			-server-host|-H)
 				[ $# -ge 2 ] || err "option -server-host requires an argument"
 				server_host="$2"
 				shift 2
 				;;
-			-server-port)
+			-server-port|-S)
 				[ $# -ge 2 ] || err "option -server-port requires an argument"
 				server_port="$2"
 				shift 2
 				;;
-			-client-port)
+			-client-port|-p)
 				[ $# -ge 2 ] || err "option -client-port requires an argument"
 				client_port="$2"
 				shift 2
 				;;
-			-psk)
+			-psk|-k)
 				[ $# -ge 2 ] || err "option -psk requires an argument"
 				psk="$2"
 				shift 2
 				;;
-			-memlimit)
+			-memlimit|-m)
 				[ $# -ge 2 ] || err "option -memlimit requires an argument"
 				memlimit="$2"
 				shift 2
 				;;
-			-description)
+			-description|-d|-client-comment|-c)
 				[ $# -ge 2 ] || err "option -description requires an argument"
 				description="$2"
 				shift 2
 				;;
-			-ip-check-url)
+			-ip-check-url|-i)
 				[ $# -ge 2 ] || err "option -ip-check-url requires an argument"
 				ip_check_url="$2"
 				shift 2
 				;;
-			-socket)
+			-ip-version|-V)
+				[ $# -ge 2 ] || err "option -ip-version requires an argument"
+				ip_version="$2"
+				shift 2
+				;;
+			-socket|-s)
 				[ $# -ge 2 ] || err "option -socket requires an argument"
 				socket_path="$2"
 				shift 2
@@ -148,6 +155,10 @@ cmd_register() {
 		payload="$payload,\"ip_check_url\":\"$(json_escape "$ip_check_url")\""
 	fi
 
+	if [ -n "$ip_version" ]; then
+		payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
+	fi
+
 	payload="$payload}"
 
 	ubus_call register "$payload"
@@ -161,22 +172,22 @@ cmd_deregister() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-uid)
+			-uid|-u)
 				[ $# -ge 2 ] || err "option -uid requires an argument"
 				uid="$2"
 				shift 2
 				;;
-			-server-host)
+			-server-host|-H)
 				[ $# -ge 2 ] || err "option -server-host requires an argument"
 				server_host="$2"
 				shift 2
 				;;
-			-server-port)
+			-server-port|-S)
 				[ $# -ge 2 ] || err "option -server-port requires an argument"
 				server_port="$2"
 				shift 2
 				;;
-			-socket)
+			-socket|-s)
 				[ $# -ge 2 ] || err "option -socket requires an argument"
 				socket_path="$2"
 				shift 2
@@ -210,30 +221,35 @@ cmd_refresh() {
 	server_host=""
 	server_port=""
 	force="false"
+	all="false"
 	socket_path=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-uid)
+			-uid|-u)
 				[ $# -ge 2 ] || err "option -uid requires an argument"
 				uid="$2"
 				shift 2
 				;;
-			-server-host)
+			-server-host|-H)
 				[ $# -ge 2 ] || err "option -server-host requires an argument"
 				server_host="$2"
 				shift 2
 				;;
-			-server-port)
+			-server-port|-S)
 				[ $# -ge 2 ] || err "option -server-port requires an argument"
 				server_port="$2"
 				shift 2
 				;;
-			-force)
+			-all|-a)
+				all="true"
+				shift 1
+				;;
+			-force|-f)
 				force="true"
 				shift 1
 				;;
-			-socket)
+			-socket|-s)
 				[ $# -ge 2 ] || err "option -socket requires an argument"
 				socket_path="$2"
 				shift 2
@@ -247,29 +263,41 @@ cmd_refresh() {
 		esac
 	done
 
-	need_arg "-uid" "$uid"
-	need_arg "-server-host" "$server_host"
-	need_arg "-server-port" "$server_port"
-
-	is_uint "$server_port" || err "-server-port must be an integer"
+	# 检查参数组合：如果使用 -all，则不需要 uid/host/port
+	if [ "$all" = "true" ]; then
+		: # all 模式下不需要检查 uid/host/port
+	else
+		need_arg "-uid" "$uid"
+		need_arg "-server-host" "$server_host"
+		need_arg "-server-port" "$server_port"
+		is_uint "$server_port" || err "-server-port must be an integer"
+	fi
 
 	payload="{"
-	payload="$payload\"uid\":\"$(json_escape "$uid")\""
-	payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
-	payload="$payload,\"server_port\":$server_port"
+	if [ "$all" = "true" ]; then
+		payload="$payload\"all\":true"
+	else
+		payload="$payload\"uid\":\"$(json_escape "$uid")\""
+		payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
+		payload="$payload,\"server_port\":$server_port"
+	fi
 	payload="$payload,\"force\":$force"
-	payload="$payload,\"all\":false"
 	payload="$payload}"
 
 	ubus_call refresh "$payload"
 }
 
 cmd_status() {
+	json_output="false"
 	socket_path=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-socket)
+			-json|-j)
+				json_output="true"
+				shift 1
+				;;
+			-socket|-s)
 				[ $# -ge 2 ] || err "option -socket requires an argument"
 				socket_path="$2"
 				shift 2
@@ -283,7 +311,14 @@ cmd_status() {
 		esac
 	done
 
-	ubus_call status '{}'
+	payload="{}"
+	if [ "$json_output" = "true" ]; then
+		# ubus 调用本身返回 JSON，这里只是标记需要原始 JSON 输出
+		# 实际处理由调用者决定，ubus_call 直接返回 JSON
+		:
+	fi
+
+	ubus_call status "$payload"
 }
 
 cmd_dump() {
@@ -291,7 +326,7 @@ cmd_dump() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-socket)
+			-socket|-s)
 				[ $# -ge 2 ] || err "option -socket requires an argument"
 				socket_path="$2"
 				shift 2
@@ -342,3 +377,5 @@ main() {
 }
 
 main "$@"
+
+# vim: set sw=2 ts=2 et:
