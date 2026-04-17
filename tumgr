@@ -59,6 +59,7 @@ cmd_register() {
 	psk=""
 	memlimit=""
 	description=""
+	client_comment=""
 	ip_check_url=""
 	ip_version=""
 	socket_path=""
@@ -95,9 +96,14 @@ cmd_register() {
 				memlimit="$2"
 				shift 2
 				;;
-			-description|-d|-client-comment|-c)
+			-description|-d)
 				[ $# -ge 2 ] || err "option -description requires an argument"
 				description="$2"
+				shift 2
+				;;
+			-client-comment|-c)
+				[ $# -ge 2 ] || err "option -client-comment requires an argument"
+				client_comment="$2"
 				shift 2
 				;;
 			-ip-check-url|-i)
@@ -149,6 +155,10 @@ cmd_register() {
 
 	if [ -n "$description" ]; then
 		payload="$payload,\"description\":\"$(json_escape "$description")\""
+	fi
+
+	if [ -n "$client_comment" ]; then
+		payload="$payload,\"client_comment\":\"$(json_escape "$client_comment")\""
 	fi
 
 	if [ -n "$ip_check_url" ]; then
