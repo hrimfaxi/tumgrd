@@ -19,7 +19,6 @@
 #define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
 #define DEFAULT_SOCKET_PATH               NULL
 #define DEFAULT_CLIENT_BIN                "tuctl_client"
-#define DEFAULT_LOG_FORMAT                "text"
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
 
@@ -32,7 +31,6 @@ static void tumgrd_config_init(struct tumgrd_config *cfg) {
   cfg->db_path      = TUMGRD_DB_PATH;
   cfg->socket_path  = DEFAULT_SOCKET_PATH;
   cfg->client_bin   = DEFAULT_CLIENT_BIN;
-  cfg->log_format   = DEFAULT_LOG_FORMAT;
   cfg->log_level    = DEFAULT_LOG_LEVEL;
   cfg->interval_sec = DEFAULT_INTERVAL;
 }
@@ -46,11 +44,10 @@ static void usage(FILE *out, const char *prog) {
           "  -i, --interval SEC       monitor interval seconds (10-3600) (default: %d)\n"
           "  -s, --socket PATH        unix socket path (default: %s)\n"
           "      --client-bin PATH    path to tuctl_client binary (default: %s)\n"
-          "      --log-format FMT     log format: text|json (default: %s)\n"
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "  -h, --help               show this help\n",
           prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, DEFAULT_SOCKET_PATH == NULL ? "null" : DEFAULT_SOCKET_PATH,
-          DEFAULT_CLIENT_BIN, DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL);
+          DEFAULT_CLIENT_BIN, DEFAULT_LOG_LEVEL);
 }
 
 static bool parse_interval(const char *s, int *out) {
@@ -75,8 +72,7 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
                                             {"interval", required_argument, NULL, 'i'},
                                             {"socket", required_argument, NULL, 's'},
                                             {"client-bin", required_argument, NULL, 1},
-                                            {"log-format", required_argument, NULL, 2},
-                                            {"log-level", required_argument, NULL, 3},
+                                            {"log-level", required_argument, NULL, 2},
                                             {"help", no_argument, NULL, 'h'},
                                             {0, 0, 0, 0}};
 
@@ -98,9 +94,6 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->client_bin = optarg;
       break;
     case 2:
-      cfg->log_format = optarg;
-      break;
-    case 3:
       cfg->log_level = optarg;
       break;
     case 'h':
@@ -197,9 +190,9 @@ int main(int argc, char **argv) {
   g_reconcile_timer.cb = tumgrd_reconcile_timer_cb;
   uloop_timeout_set(&g_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s log_format=%s client_bin=%s",
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
            cfg.db_path ? cfg.db_path : "(null)", cfg.socket_path ? cfg.socket_path : "(default)", cfg.interval_sec,
-           cfg.log_level ? cfg.log_level : "(null)", cfg.log_format ? cfg.log_format : "(null)",
+           cfg.log_level ? cfg.log_level : "(null)",
            cfg.client_bin ? cfg.client_bin : "(null)");
 
   uloop_run();

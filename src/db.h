@@ -37,7 +37,6 @@ struct tumgrd_config {
   const char *db_path;
   const char *socket_path;
   const char *client_bin;
-  const char *log_format;
   const char *log_level;
   int         interval_sec;
 };
