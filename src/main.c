@@ -51,23 +51,24 @@ static void usage(FILE *out, const char *prog) {
           DEFAULT_CLIENT_BIN, DEFAULT_LOG_LEVEL);
 }
 
-static bool parse_interval(const char *s, int *out) {
+static int parse_interval(const char *s, int *out) {
   char *end = NULL;
   long  v   = strtol(s, &end, 10);
 
   if (!s || s[0] == '\0' || !end || *end != '\0') {
-    return false;
+    return -1;
   }
   if (v < 10 || v > 3600) {
-    return false;
+    return -1;
   }
 
   *out = (int) v;
-  return true;
+  return 0;
 }
 
 static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
   int c;
+  int err;
 
   static const struct option long_opts[] = {{"database", required_argument, NULL, 'd'},
                                             {"interval", required_argument, NULL, 'i'},
@@ -83,10 +84,7 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->db_path = optarg;
       break;
     case 'i':
-      if (!parse_interval(optarg, &cfg->interval_sec)) {
-        fprintf(stderr, "invalid interval: %s\n", optarg);
-        return -1;
-      }
+      try2(parse_interval(optarg, &cfg->interval_sec), "invalid interval: %s", optarg);
       break;
     case 's':
       cfg->socket_path = optarg;
@@ -99,20 +97,24 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       break;
     case 'h':
       usage(stdout, argv[0]);
-      return 1;
+      err = 1;
+      goto err_cleanup;
     default:
-      usage(stderr, argv[0]);
-      return -1;
+      goto usage;
     }
   }
 
   if (optind < argc) {
-    fprintf(stderr, "unexpected positional argument: %s\n", argv[optind]);
+    log_error("unexpected positional argument: %s", argv[optind]);
+  usage:
     usage(stderr, argv[0]);
-    return -1;
+    err = -1;
+    goto err_cleanup;
   }
 
-  return 0;
+  err = 0;
+err_cleanup:
+  return err;
 }
 
 static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
@@ -171,8 +173,7 @@ int main(int argc, char **argv) {
     return 0;
   }
   try2(err, "[main] parse_args failed");
-
-  try2(parse_log_level(cfg.log_level, &log_verbosity), "invalid log level: %s (expected: error, warn, info, debug, trace)\n",
+  try2(parse_log_level(cfg.log_level, &log_verbosity), "invalid log level: %s (expected: error, warn, info, debug, trace)",
        cfg.log_level ? cfg.log_level : "(null)");
 
   memset(&g_ctx, 0, sizeof(g_ctx));
