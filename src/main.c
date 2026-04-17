@@ -24,7 +24,8 @@
 
 static struct tumgrd_ctx    g_ctx;
 static struct ubus_context *g_ubus = NULL;
-static struct uloop_timeout g_reconcile_timer;
+static struct uloop_timeout g_startup_reconcile_timer;
+static struct uloop_timeout g_periodic_reconcile_timer;
 
 static void tumgrd_config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
@@ -114,9 +115,14 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
   return 0;
 }
 
-static void tumgrd_reconcile_timer_cb(struct uloop_timeout *t) {
+static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
   (void) t;
   (void) tumgrd_reconcile_all(&g_ctx.db, true);
+}
+
+static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t) {
+  (void) tumgrd_reconcile_all(&g_ctx.db, false);
+  uloop_timeout_set(t, g_ctx.cfg.interval_sec * 1000);
 }
 
 static void tumgrd_signal_handler(int signo) {
@@ -171,7 +177,8 @@ int main(int argc, char **argv) {
 
   memset(&g_ctx, 0, sizeof(g_ctx));
   g_ctx.cfg = cfg;
-  memset(&g_reconcile_timer, 0, sizeof(g_reconcile_timer));
+  memset(&g_startup_reconcile_timer, 0, sizeof(g_startup_reconcile_timer));
+  memset(&g_periodic_reconcile_timer, 0, sizeof(g_periodic_reconcile_timer));
 
   try2(uloop_init(), "[main] uloop_init failed");
 
@@ -187,13 +194,14 @@ int main(int argc, char **argv) {
 
   try2(tumgrd_ubus_init(g_ubus, &g_ctx), "[main] tumgrd_ubus_init failed");
 
-  g_reconcile_timer.cb = tumgrd_reconcile_timer_cb;
-  uloop_timeout_set(&g_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
+  g_startup_reconcile_timer.cb  = tumgrd_startup_reconcile_timer_cb;
+  g_periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
 
+  uloop_timeout_set(&g_startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
+  uloop_timeout_set(&g_periodic_reconcile_timer, g_ctx.cfg.interval_sec * 1000);
   log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
            cfg.db_path ? cfg.db_path : "(null)", cfg.socket_path ? cfg.socket_path : "(default)", cfg.interval_sec,
-           cfg.log_level ? cfg.log_level : "(null)",
-           cfg.client_bin ? cfg.client_bin : "(null)");
+           cfg.log_level ? cfg.log_level : "(null)", cfg.client_bin ? cfg.client_bin : "(null)");
 
   uloop_run();
 
@@ -206,7 +214,8 @@ err_cleanup:
     g_ubus = NULL;
   }
 
-  uloop_timeout_cancel(&g_reconcile_timer);
+  uloop_timeout_cancel(&g_startup_reconcile_timer);
+  uloop_timeout_cancel(&g_periodic_reconcile_timer);
 
   if (db_opened) {
     tumgrd_db_close(&g_ctx.db);
