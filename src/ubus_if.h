@@ -4,5 +4,5 @@
 
 #include <libubus.h>
 
-int  tumgrd_ubus_init(struct ubus_context *ctx, struct tumgrd_db *db);
+int  tumgrd_ubus_init(struct ubus_context *ubus, struct tumgrd_ctx *ctx);
 void tumgrd_ubus_cleanup(void);

@@ -33,6 +33,20 @@ struct tumgrd_db {
   char     path[256];
 };
 
+struct tumgrd_config {
+  const char *db_path;
+  const char *socket_path;
+  const char *client_bin;
+  const char *log_format;
+  const char *log_level;
+  int         interval_sec;
+};
+
+struct tumgrd_ctx {
+  struct tumgrd_db     db;
+  struct tumgrd_config cfg;
+};
+
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);
 int  tumgrd_db_init_schema(struct tumgrd_db *db);
 void tumgrd_db_close(struct tumgrd_db *db);

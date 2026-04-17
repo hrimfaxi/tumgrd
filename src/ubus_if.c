@@ -16,7 +16,7 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
-static struct tumgrd_db *g_db = NULL;
+static struct tumgrd_ctx *g_ctx = NULL;
 
 /* =========================================================================
  * helpers
@@ -159,7 +159,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   (void) obj;
   (void) method;
 
-  if (!g_db) {
+  if (!g_ctx) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
@@ -172,7 +172,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  get_rc = tumgrd_db_get_node(g_db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
+  get_rc = tumgrd_db_get_node(&g_ctx->db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
                               blobmsg_get_string(tb[REG_UID]), &old_node);
 
   if (get_rc == 0) {
@@ -211,7 +211,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     snprintf(node.ip_version, sizeof(node.ip_version), "%s", blobmsg_get_string(tb[REG_IP_VERSION]));
   }
 
-  rc = tumgrd_db_upsert_node(g_db, &node);
+  rc = tumgrd_db_upsert_node(&g_ctx->db, &node);
   if (rc != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -220,7 +220,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    * register 后立刻应用配置。
    * 失败时仍保留 DB 中的 desired state，方便后续自愈。
    */
-  rc = tumgrd_reconcile_one(g_db, &node, true);
+  rc = tumgrd_reconcile_one(&g_ctx->db, &node, true);
 
   blob_buf_init(&b, 0);
   blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "stored_but_apply_failed");
@@ -258,7 +258,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
   (void) obj;
   (void) method;
 
-  if (!g_db) {
+  if (!g_ctx) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
@@ -268,7 +268,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  resolve_rc = tumgrd_resolve_node(g_db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
+  resolve_rc = tumgrd_resolve_node(&g_ctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
                                    (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), &node);
 
   if (resolve_rc == 1) {
@@ -282,7 +282,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   rc_server = tumgrd_runner_server_del(&node);
   rc_client = tumgrd_runner_client_del(&node);
-  rc_db     = tumgrd_db_delete_node(g_db, node.server_host, node.server_port, node.uid);
+  rc_db     = tumgrd_db_delete_node(&g_ctx->db, node.server_host, node.server_port, node.uid);
 
   blob_buf_init(&b, 0);
 
@@ -331,7 +331,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   (void) obj;
   (void) method;
 
-  if (!g_db) {
+  if (!g_ctx) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
@@ -343,7 +343,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   blob_buf_init(&b, 0);
 
   if (is_all) {
-    rc = tumgrd_reconcile_all(g_db, is_force);
+    rc = tumgrd_reconcile_all(&g_ctx->db, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "partial_error");
     blobmsg_add_string(&b, "scope", "all");
@@ -363,7 +363,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     struct tumgrd_node node;
     int                resolve_rc;
 
-    resolve_rc = tumgrd_resolve_node(g_db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
+    resolve_rc = tumgrd_resolve_node(&g_ctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
                                      (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), &node);
 
     if (resolve_rc == 1) {
@@ -378,7 +378,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
       return UBUS_STATUS_UNKNOWN_ERROR;
     }
 
-    rc = tumgrd_reconcile_one(g_db, &node, is_force);
+    rc = tumgrd_reconcile_one(&g_ctx->db, &node, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
@@ -409,11 +409,11 @@ static int handle_status(struct ubus_context *ctx, struct ubus_object *obj, stru
   (void) method;
   (void) msg;
 
-  if (!g_db) {
+  if (!g_ctx) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
-  rc = tumgrd_db_list_nodes(g_db, &nodes, &count);
+  rc = tumgrd_db_list_nodes(&g_ctx->db, &nodes, &count);
   if (rc != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -458,15 +458,15 @@ static struct ubus_object tumgrd_obj = {
   .n_methods = ARRAY_SIZE(tumgrd_methods),
 };
 
-int tumgrd_ubus_init(struct ubus_context *ctx, struct tumgrd_db *db) {
-  if (!ctx || !db) {
+int tumgrd_ubus_init(struct ubus_context *ubus, struct tumgrd_ctx *ctx) {
+  if (!ubus || !ctx) {
     return -1;
   }
 
-  g_db = db;
-  return ubus_add_object(ctx, &tumgrd_obj);
+  g_ctx = ctx;
+  return ubus_add_object(ubus, &tumgrd_obj);
 }
 
 void tumgrd_ubus_cleanup(void) {
-  g_db = NULL;
+  g_ctx = NULL;
 }
