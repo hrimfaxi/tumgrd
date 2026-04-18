@@ -25,15 +25,6 @@
 static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t);
 static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t);
 
-static struct tumgrd_ctx    g_ctx;
-static struct uloop_timeout g_startup_reconcile_timer = {
-  .cb = tumgrd_startup_reconcile_timer_cb,
-};
-
-static struct uloop_timeout g_periodic_reconcile_timer = {
-  .cb = tumgrd_periodic_reconcile_timer_cb,
-};
-
 static void tumgrd_config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->db_path      = TUMGRD_DB_PATH;
@@ -125,13 +116,16 @@ err_cleanup:
 }
 
 static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
-  (void) t;
-  (void) tumgrd_reconcile_all(&g_ctx.db, true);
+  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, startup_reconcile_timer);
+
+  tumgrd_reconcile_all(&ctx->db, true);
 }
 
 static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t) {
-  (void) tumgrd_reconcile_all(&g_ctx.db, false);
-  uloop_timeout_set(t, g_ctx.cfg.interval_sec * 1000);
+  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, periodic_reconcile_timer);
+
+  tumgrd_reconcile_all(&ctx->db, false);
+  uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
 }
 
 static void tumgrd_signal_handler(int signo) {
@@ -169,48 +163,52 @@ static int parse_log_level(const char *s, int *out) {
 }
 
 int main(int argc, char **argv) {
-  int  err       = -1;
-  bool db_opened = false;
+  int               err       = -1;
+  bool              db_opened = false;
+  struct tumgrd_ctx ctx = {};
 
-  tumgrd_config_init(&g_ctx.cfg);
-
-  err = parse_args(argc, argv, &g_ctx.cfg);
+  tumgrd_config_init(&ctx.cfg);
+  err = parse_args(argc, argv, &ctx.cfg);
   if (err > 0) {
     return 0;
   }
   try2(err, "[main] parse_args failed");
-  try2(parse_log_level(g_ctx.cfg.log_level, &log_verbosity),
-       "invalid log level: %s (expected: error, warn, info, debug, trace)", nonempty_or_default(g_ctx.cfg.log_level, "(null)"));
+  try2(parse_log_level(ctx.cfg.log_level, &log_verbosity), "invalid log level: %s (expected: error, warn, info, debug, trace)",
+       nonempty_or_default(ctx.cfg.log_level, "(null)"));
 
   try2(uloop_init(), "[main] uloop_init failed");
 
   signal(SIGINT, tumgrd_signal_handler);
   signal(SIGTERM, tumgrd_signal_handler);
 
-  try2(tumgrd_db_open(&g_ctx.db, g_ctx.cfg.db_path), "[main] open db failed: %s", g_ctx.cfg.db_path);
+  try2(tumgrd_db_open(&ctx.db, ctx.cfg.db_path), "[main] open db failed: %s", ctx.cfg.db_path);
   db_opened = true;
-  try2(tumgrd_db_init_schema(&g_ctx.db), "[main] init schema failed");
-  try2(tumgrd_ubus_init(&g_ctx), "[main] tumgrd_ubus_init failed");
+  try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
+  try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  uloop_timeout_set(&g_startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
-  uloop_timeout_set(&g_periodic_reconcile_timer, g_ctx.cfg.interval_sec * 1000);
+  ctx.startup_reconcile_timer.cb = tumgrd_startup_reconcile_timer_cb;
+  uloop_timeout_set(&ctx.startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
+
+  ctx.periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
+  uloop_timeout_set(&ctx.periodic_reconcile_timer, ctx.cfg.interval_sec * 1000);
+
   log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
-           nonempty_or_default(g_ctx.cfg.db_path, "(null)"), nonempty_or_default(g_ctx.cfg.socket_path, "(default)"),
-           g_ctx.cfg.interval_sec, nonempty_or_default(g_ctx.cfg.log_level, "(null)"),
-           nonempty_or_default(g_ctx.cfg.client_bin, "(null)"));
+           nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
+           ctx.cfg.interval_sec, nonempty_or_default(ctx.cfg.log_level, "(null)"),
+           nonempty_or_default(ctx.cfg.client_bin, "(null)"));
 
   uloop_run();
 
   err = 0;
 
 err_cleanup:
-  tumgrd_ubus_cleanup(&g_ctx);
+  tumgrd_ubus_cleanup(&ctx);
 
-  uloop_timeout_cancel(&g_startup_reconcile_timer);
-  uloop_timeout_cancel(&g_periodic_reconcile_timer);
+  uloop_timeout_cancel(&ctx.startup_reconcile_timer);
+  uloop_timeout_cancel(&ctx.periodic_reconcile_timer);
 
   if (db_opened) {
-    tumgrd_db_close(&g_ctx.db);
+    tumgrd_db_close(&ctx.db);
     db_opened = false;
   }
 

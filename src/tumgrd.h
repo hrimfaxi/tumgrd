@@ -16,6 +16,8 @@ struct tumgrd_ctx {
   struct ubus_context      *ubus;
   struct ubus_object        ubus_obj;
   struct ubus_event_handler net_event_handler;
+  struct uloop_timeout      startup_reconcile_timer;
+  struct uloop_timeout      periodic_reconcile_timer;
   bool                      net_event_registered;
   bool                      ubus_obj_added;
 };
