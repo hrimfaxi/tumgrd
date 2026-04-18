@@ -5,9 +5,11 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -50,11 +52,11 @@ static int tumgrd_ip_family_from_version(const char *ip_version) {
     return 0;
   }
 
-  if (strcmp(ip_version, "4") == 0 || strcmp(ip_version, "ipv4") == 0) {
+  if (strcmp(ip_version, "ipv4") == 0) {
     return 4;
   }
 
-  if (strcmp(ip_version, "6") == 0 || strcmp(ip_version, "ipv6") == 0) {
+  if (strcmp(ip_version, "ipv6") == 0) {
     return 6;
   }
 
@@ -205,6 +207,102 @@ static int tumgrd_exec_capture(char *const argv[], char *out, size_t out_len) {
   return 0;
 }
 
+/*
+ * 通过连接外部 IPv6 主机获取本机 WAN IPv6 地址
+ * 原理：connect() 后 getsockname() 返回的是内核选路后的源地址
+ * 这个地址是能出网的全球单播地址，而非 fe80::/10 等链路本地地址
+ */
+static int tumgrd_detect_ipv6_wan_by_connect(const char *host, int port, char *out, size_t out_len) {
+  struct addrinfo         hints, *res, *rp;
+  int                     sockfd = -1;
+  int                     rc;
+  struct sockaddr_storage local_addr;
+  socklen_t               addr_len = sizeof(local_addr);
+  void                   *addr_ptr = NULL;
+  const char             *addr_str = NULL;
+  char                    port_str[6];
+
+  if (!out || out_len == 0) {
+    return -1;
+  }
+
+  out[0] = '\0';
+
+  if (!host || host[0] == '\0') {
+    host = "ipv6.baidu.com";
+  }
+  if (port <= 0 || port > 65535) {
+    port = 80;
+  }
+
+  snprintf(port_str, sizeof(port_str), "%d", port);
+
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family   = AF_INET6;    /* 强制 IPv6 */
+  hints.ai_socktype = SOCK_STREAM; /* TCP */
+
+  rc = getaddrinfo(host, port_str, &hints, &res);
+  if (rc != 0) {
+    log_error("[ipdetect] getaddrinfo failed for %s:%d: %s", host, port, gai_strerror(rc));
+    return -1;
+  }
+
+  /* 尝试连接第一个可用的地址 */
+  for (rp = res; rp != NULL; rp = rp->ai_next) {
+    sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+    if (sockfd < 0) {
+      continue;
+    }
+
+    /* 非阻塞连接也可以，但这里用阻塞更简单 */
+    if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0) {
+      break; /* 连接成功 */
+    }
+
+    close(sockfd);
+    sockfd = -1;
+  }
+
+  freeaddrinfo(res);
+
+  if (sockfd < 0) {
+    log_error("[ipdetect] failed to connect to %s:%d", host, port);
+    return -1;
+  }
+
+  /* 获取本地地址（即 WAN IPv6 地址） */
+  if (getsockname(sockfd, (struct sockaddr *) &local_addr, &addr_len) != 0) {
+    log_error("[ipdetect] getsockname failed: %s", strerror(errno));
+    close(sockfd);
+    return -1;
+  }
+
+  close(sockfd);
+
+  /* 转换为字符串 */
+  if (local_addr.ss_family == AF_INET6) {
+    struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &local_addr;
+    addr_ptr                  = &sin6->sin6_addr;
+    addr_str                  = inet_ntop(AF_INET6, addr_ptr, out, out_len);
+  } else {
+    log_error("[ipdetect] unexpected address family: %d", (int) local_addr.ss_family);
+    return -1;
+  }
+
+  if (!addr_str) {
+    log_error("[ipdetect] inet_ntop failed");
+    return -1;
+  }
+
+  /* 过滤掉链路本地地址（理论上不应该出现，但做个保险） */
+  if (strncasecmp(out, "fe80:", 5) == 0 || strncasecmp(out, "fe80::", 6) == 0) {
+    log_error("[ipdetect] got link-local address %s, not a WAN address", out);
+    return -1;
+  }
+
+  return 0;
+}
+
 int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, size_t out_len) {
   char final_url[256];
   char buf[512];
@@ -216,6 +314,19 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
 
   out[0] = '\0';
   tumgrd_build_url(url, final_url, sizeof(final_url));
+
+  /*
+   * 如果是 IPv6 请求且没有指定外部检测 URL，
+   * 优先使用本地连接探测方法（无需外部 HTTP 服务）
+   */
+  int family = tumgrd_ip_family_from_version(ip_version);
+  if (family == 6 && (!url || url[0] == '\0' || strcmp(url, TUMGRD_DEFAULT_IP_CHECK_URL) == 0)) {
+    rc = tumgrd_detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
+    if (rc == 0) {
+      return 0;
+    }
+    log_info("[ipdetect] IPv6 connect method failed, fallback to HTTP check");
+  }
 
   /*
    * 优先 OpenWrt 常见的 uclient-fetch
