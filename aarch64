@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+export STAGING_DIR=~/temp/openwrt-sdk-25.12.2-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64/staging_dir
+mkdir -p build
+cmake -DCMAKE_TOOLCHAIN_FILE=$(pwd)/openwrt-aarch64.cmake -B build . \
+  -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build build --target clean
+cmake --build build --target all # -- VERBOSE=1
+ssh lier "rm /usr/sbin/tumgrd || true"
+scp build/tumgrd lier:/usr/sbin
+ssh lier service tumgrd restart
