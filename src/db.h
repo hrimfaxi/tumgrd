@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sqlite3.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -41,11 +42,6 @@ struct tumgrd_config {
   int         interval_sec;
 };
 
-struct tumgrd_ctx {
-  struct tumgrd_db     db;
-  struct tumgrd_config cfg;
-};
-
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);
 int  tumgrd_db_init_schema(struct tumgrd_db *db);
 void tumgrd_db_close(struct tumgrd_db *db);
@@ -68,3 +64,5 @@ void tumgrd_db_free_nodes(struct tumgrd_node *nodes);
 
 int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
                              const char *current_ip, const char *status, int64_t last_updated);
+
+// vim :set sw=2 ts=2 et:

@@ -17,8 +17,6 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
-static struct tumgrd_ctx *g_ctx = NULL;
-
 /* =========================================================================
  * helpers
  * ========================================================================= */
@@ -157,12 +155,8 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   int                rc;
   struct blob_buf    b = {0};
 
-  (void) obj;
   (void) method;
-
-  if (!g_ctx) {
-    return UBUS_STATUS_UNKNOWN_ERROR;
-  }
+  struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
 
   memset(&node, 0, sizeof(node));
   memset(&old_node, 0, sizeof(old_node));
@@ -173,7 +167,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  get_rc = tumgrd_db_get_node(&g_ctx->db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
+  get_rc = tumgrd_db_get_node(&tctx->db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
                               blobmsg_get_string(tb[REG_UID]), &old_node);
 
   if (get_rc == 0) {
@@ -212,7 +206,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     snprintf(node.ip_version, sizeof(node.ip_version), "%s", blobmsg_get_string(tb[REG_IP_VERSION]));
   }
 
-  rc = tumgrd_db_upsert_node(&g_ctx->db, &node);
+  rc = tumgrd_db_upsert_node(&tctx->db, &node);
   if (rc != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -221,7 +215,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    * register 后立刻应用配置。
    * 失败时仍保留 DB 中的 desired state，方便后续自愈。
    */
-  rc = tumgrd_reconcile_one(&g_ctx->db, &node, true);
+  rc = tumgrd_reconcile_one(&tctx->db, &node, true);
 
   blob_buf_init(&b, 0);
   blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "stored_but_apply_failed");
@@ -256,12 +250,9 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
   int                rc_db;
   struct blob_buf    b = {0};
 
-  (void) obj;
   (void) method;
 
-  if (!g_ctx) {
-    return UBUS_STATUS_UNKNOWN_ERROR;
-  }
+  struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
 
   blobmsg_parse(dereg_policy, __DEREG_MAX, tb, blob_data(msg), blob_len(msg));
 
@@ -269,7 +260,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  resolve_rc = tumgrd_resolve_node(&g_ctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
+  resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
                                    (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), &node);
 
   if (resolve_rc == 1) {
@@ -283,7 +274,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   rc_server = tumgrd_runner_server_del(&node);
   rc_client = tumgrd_runner_client_del(&node);
-  rc_db     = tumgrd_db_delete_node(&g_ctx->db, node.server_host, node.server_port, node.uid);
+  rc_db     = tumgrd_db_delete_node(&tctx->db, node.server_host, node.server_port, node.uid);
 
   blob_buf_init(&b, 0);
 
@@ -329,12 +320,9 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   struct blob_buf   b = {0};
   int               rc;
 
-  (void) obj;
   (void) method;
 
-  if (!g_ctx) {
-    return UBUS_STATUS_UNKNOWN_ERROR;
-  }
+  struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
 
   blobmsg_parse(ref_policy, __REF_MAX, tb, blob_data(msg), blob_len(msg));
 
@@ -344,7 +332,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   blob_buf_init(&b, 0);
 
   if (is_all) {
-    rc = tumgrd_reconcile_all(&g_ctx->db, is_force);
+    rc = tumgrd_reconcile_all(&tctx->db, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "partial_error");
     blobmsg_add_string(&b, "scope", "all");
@@ -364,7 +352,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     struct tumgrd_node node;
     int                resolve_rc;
 
-    resolve_rc = tumgrd_resolve_node(&g_ctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
+    resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
                                      (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), &node);
 
     if (resolve_rc == 1) {
@@ -379,7 +367,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
       return UBUS_STATUS_UNKNOWN_ERROR;
     }
 
-    rc = tumgrd_reconcile_one(&g_ctx->db, &node, is_force);
+    rc = tumgrd_reconcile_one(&tctx->db, &node, is_force);
 
     blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
@@ -406,15 +394,12 @@ static int handle_status(struct ubus_context *ctx, struct ubus_object *obj, stru
   struct blob_buf     b = {0};
   void               *array;
 
-  (void) obj;
   (void) method;
   (void) msg;
 
-  if (!g_ctx) {
-    return UBUS_STATUS_UNKNOWN_ERROR;
-  }
+  struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
 
-  rc = tumgrd_db_list_nodes(&g_ctx->db, &nodes, &count);
+  rc = tumgrd_db_list_nodes(&tctx->db, &nodes, &count);
   if (rc != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -452,24 +437,69 @@ static const struct ubus_method tumgrd_methods[] = {
 
 static struct ubus_object_type tumgrd_obj_type = UBUS_OBJECT_TYPE("tumgrd", tumgrd_methods);
 
-static struct ubus_object tumgrd_obj = {
-  .name      = "tumgrd",
-  .type      = &tumgrd_obj_type,
-  .methods   = tumgrd_methods,
-  .n_methods = ARRAY_SIZE(tumgrd_methods),
-};
+static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
+                                struct blob_attr *msg);
 
-int tumgrd_ubus_init(struct ubus_context *ubus, struct tumgrd_ctx *ctx) {
-  if (!ubus || !ctx) {
+int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
+  int err;
+
+  if (!ctx) {
     return -1;
   }
 
-  g_ctx = ctx;
-  return ubus_add_object(ubus, &tumgrd_obj);
+  ctx->ubus = ubus_connect(ctx->cfg.socket_path);
+  if (!ctx->ubus) {
+    log_error("ubus_connect failed: socket=%s", nonempty_or_default(ctx->cfg.socket_path, "(default)"));
+    return -1;
+  }
+  ubus_add_uloop(ctx->ubus);
+
+  ctx->net_event_registered = false;
+  ctx->ubus_obj_added       = false;
+  memset(&ctx->ubus_obj, 0, sizeof(ctx->ubus_obj));
+  memset(&ctx->net_event_handler, 0, sizeof(ctx->net_event_handler));
+
+  ctx->net_event_handler.cb = tumgrd_net_event_cb;
+  err                       = ubus_register_event_handler(ctx->ubus, &ctx->net_event_handler, "network.interface");
+  if (err != 0) {
+    tumgrd_ubus_cleanup(ctx);
+    return err;
+  }
+  ctx->net_event_registered = true;
+
+  ctx->ubus_obj.name      = "tumgrd";
+  ctx->ubus_obj.type      = &tumgrd_obj_type;
+  ctx->ubus_obj.methods   = tumgrd_methods;
+  ctx->ubus_obj.n_methods = ARRAY_SIZE(tumgrd_methods);
+
+  err = ubus_add_object(ctx->ubus, &ctx->ubus_obj);
+  if (err != 0) {
+    tumgrd_ubus_cleanup(ctx);
+    return err;
+  }
+  ctx->ubus_obj_added = true;
+
+  return 0;
 }
 
-void tumgrd_ubus_cleanup(void) {
-  g_ctx = NULL;
+void tumgrd_ubus_cleanup(struct tumgrd_ctx *ctx) {
+  if (!ctx || !ctx->ubus)
+    return;
+
+  if (ctx->net_event_registered) {
+    ubus_unregister_event_handler(ctx->ubus, &ctx->net_event_handler);
+    ctx->net_event_registered = false;
+  }
+
+  if (ctx->ubus_obj_added) {
+    ubus_remove_object(ctx->ubus, &ctx->ubus_obj);
+    ctx->ubus_obj_added = false;
+  }
+
+  if (ctx->ubus) {
+    ubus_free(ctx->ubus);
+    ctx->ubus = NULL;
+  }
 }
 
 static const char *const wan_interfaces[] = {"pppoe-wan", "wan", "wan6", NULL};
@@ -489,8 +519,13 @@ static bool is_wan_interface(const char *ifname) {
 static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
                                 struct blob_attr *msg) {
   (void) ctx;
-  (void) ev;
   (void) type;
+
+  if (!msg) {
+    return;
+  }
+
+  struct tumgrd_ctx *tctx = container_of(ev, struct tumgrd_ctx, net_event_handler);
 
   /* ubus listen 看到的格式:
    * { "network.interface": {"action":"ifup","interface":"bird2"} }
@@ -514,10 +549,8 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
   /* 只处理 ifup 事件，且接口匹配 */
   if (strcmp(action, "ifup") == 0 && is_wan_interface(ifname)) {
     log_info("[ubus] WAN interface %s up, force reconcile", ifname);
-    tumgrd_reconcile_all(&g_ctx->db, true);
+    tumgrd_reconcile_all(&tctx->db, true);
   }
 }
 
-struct ubus_event_handler g_net_event_handler = {
-  .cb = tumgrd_net_event_cb,
-};
+// vim: set sw=2 ts=2 et:

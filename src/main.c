@@ -22,14 +22,17 @@
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
 
-static struct tumgrd_ctx    g_ctx;
-static struct ubus_context *g_ubus = NULL;
-static struct uloop_timeout g_startup_reconcile_timer;
-static struct uloop_timeout g_periodic_reconcile_timer;
+static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t);
+static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t);
 
-static inline const char *nonempty_or_default(const char *input, const char *def_str) {
-  return input ? input : def_str;
-}
+static struct tumgrd_ctx    g_ctx;
+static struct uloop_timeout g_startup_reconcile_timer = {
+  .cb = tumgrd_startup_reconcile_timer_cb,
+};
+
+static struct uloop_timeout g_periodic_reconcile_timer = {
+  .cb = tumgrd_periodic_reconcile_timer_cb,
+};
 
 static void tumgrd_config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
@@ -165,79 +168,43 @@ static int parse_log_level(const char *s, int *out) {
   return -1;
 }
 
-/* 初始化时调用 */
-static int tumgrd_init_ubus_events(void) {
-  int err;
-
-  try2(ubus_register_event_handler(g_ubus, &g_net_event_handler, "network.interface"),
-       "[ubus] register network.interface failed: %s", ubus_strerror(_ret));
-
-  err = 0;
-err_cleanup:
-  return err;
-}
-
-/* 清理时调用 */
-static void tumgrd_cleanup_ubus_events(void) {
-  ubus_unregister_event_handler(g_ubus, &g_net_event_handler);
-}
-
 int main(int argc, char **argv) {
-  struct tumgrd_config cfg;
-  int                  err       = -1;
-  bool                 db_opened = false;
+  int  err       = -1;
+  bool db_opened = false;
 
-  tumgrd_config_init(&cfg);
+  tumgrd_config_init(&g_ctx.cfg);
 
-  err = parse_args(argc, argv, &cfg);
+  err = parse_args(argc, argv, &g_ctx.cfg);
   if (err > 0) {
     return 0;
   }
   try2(err, "[main] parse_args failed");
-  try2(parse_log_level(cfg.log_level, &log_verbosity), "invalid log level: %s (expected: error, warn, info, debug, trace)",
-       nonempty_or_default(cfg.log_level, "(null)"));
-
-  memset(&g_ctx, 0, sizeof(g_ctx));
-  g_ctx.cfg = cfg;
-  memset(&g_startup_reconcile_timer, 0, sizeof(g_startup_reconcile_timer));
-  memset(&g_periodic_reconcile_timer, 0, sizeof(g_periodic_reconcile_timer));
+  try2(parse_log_level(g_ctx.cfg.log_level, &log_verbosity),
+       "invalid log level: %s (expected: error, warn, info, debug, trace)", nonempty_or_default(g_ctx.cfg.log_level, "(null)"));
 
   try2(uloop_init(), "[main] uloop_init failed");
 
   signal(SIGINT, tumgrd_signal_handler);
   signal(SIGTERM, tumgrd_signal_handler);
 
-  try2(tumgrd_db_open(&g_ctx.db, cfg.db_path), "[main] open db failed: %s", cfg.db_path);
+  try2(tumgrd_db_open(&g_ctx.db, g_ctx.cfg.db_path), "[main] open db failed: %s", g_ctx.cfg.db_path);
   db_opened = true;
   try2(tumgrd_db_init_schema(&g_ctx.db), "[main] init schema failed");
-
-  g_ubus = try2_p(ubus_connect(cfg.socket_path), "[main] ubus_connect failed");
-  ubus_add_uloop(g_ubus);
-
-  try2(tumgrd_init_ubus_events(), "[main] failed to init ubus events");
-  try2(tumgrd_ubus_init(g_ubus, &g_ctx), "[main] tumgrd_ubus_init failed");
-
-  g_startup_reconcile_timer.cb  = tumgrd_startup_reconcile_timer_cb;
-  g_periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
+  try2(tumgrd_ubus_init(&g_ctx), "[main] tumgrd_ubus_init failed");
 
   uloop_timeout_set(&g_startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
   uloop_timeout_set(&g_periodic_reconcile_timer, g_ctx.cfg.interval_sec * 1000);
   log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
-           nonempty_or_default(cfg.db_path, "(null)"), nonempty_or_default(cfg.socket_path, "(default)"), cfg.interval_sec,
-           nonempty_or_default(cfg.log_level, "(null)"), nonempty_or_default(cfg.client_bin, "(null)"));
+           nonempty_or_default(g_ctx.cfg.db_path, "(null)"), nonempty_or_default(g_ctx.cfg.socket_path, "(default)"),
+           g_ctx.cfg.interval_sec, nonempty_or_default(g_ctx.cfg.log_level, "(null)"),
+           nonempty_or_default(g_ctx.cfg.client_bin, "(null)"));
 
   uloop_run();
 
   err = 0;
 
 err_cleanup:
-  tumgrd_ubus_cleanup();
-  tumgrd_cleanup_ubus_events();
-
-  if (g_ubus) {
-    ubus_free(g_ubus);
-    g_ubus = NULL;
-  }
+  tumgrd_ubus_cleanup(&g_ctx);
 
   uloop_timeout_cancel(&g_startup_reconcile_timer);
   uloop_timeout_cancel(&g_periodic_reconcile_timer);
