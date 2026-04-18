@@ -1,4 +1,5 @@
 #include "ubus_if.h"
+#include "log.h"
 
 #include "reconcile.h"
 #include "runner.h"
@@ -470,3 +471,53 @@ int tumgrd_ubus_init(struct ubus_context *ubus, struct tumgrd_ctx *ctx) {
 void tumgrd_ubus_cleanup(void) {
   g_ctx = NULL;
 }
+
+static const char *const wan_interfaces[] = {"pppoe-wan", "wan", "wan6", NULL};
+
+/* 添加事件处理函数实现（在任意 static 函数区域） */
+static bool is_wan_interface(const char *ifname) {
+  if (!ifname)
+    return false;
+
+  for (int i = 0; wan_interfaces[i]; i++) {
+    if (strcmp(ifname, wan_interfaces[i]) == 0)
+      return true;
+  }
+  return false;
+}
+
+static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
+                                struct blob_attr *msg) {
+  (void) ctx;
+  (void) ev;
+  (void) type;
+
+  /* ubus listen 看到的格式:
+   * { "network.interface": {"action":"ifup","interface":"bird2"} }
+   */
+  struct blob_attr                  *tb[2];
+  static const struct blobmsg_policy policy[] = {
+    [0] = {"action", BLOBMSG_TYPE_STRING},
+    [1] = {"interface", BLOBMSG_TYPE_STRING},
+  };
+
+  blobmsg_parse(policy, 2, tb, blob_data(msg), blob_len(msg));
+
+  if (!tb[0] || !tb[1])
+    return;
+
+  const char *action = blobmsg_get_string(tb[0]);
+  const char *ifname = blobmsg_get_string(tb[1]);
+
+  log_debug("[ubus] network.interface %s %s", ifname, action);
+
+  /* 只处理 ifup 事件，且接口匹配 */
+  if (strcmp(action, "ifup") == 0 && is_wan_interface(ifname)) {
+    log_info("[ubus] WAN interface %s up, force reconcile", ifname);
+    tumgrd_reconcile_all(&g_ctx->db, true);
+  }
+}
+
+struct ubus_event_handler g_net_event_handler = {
+  .cb = tumgrd_net_event_cb,
+};

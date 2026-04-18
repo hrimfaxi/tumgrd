@@ -165,6 +165,23 @@ static int parse_log_level(const char *s, int *out) {
   return -1;
 }
 
+/* 初始化时调用 */
+static int tumgrd_init_ubus_events(void) {
+  int err;
+
+  try2(ubus_register_event_handler(g_ubus, &g_net_event_handler, "network.interface"),
+       "[ubus] register network.interface failed: %s", ubus_strerror(_ret));
+
+  err = 0;
+err_cleanup:
+  return err;
+}
+
+/* 清理时调用 */
+static void tumgrd_cleanup_ubus_events(void) {
+  ubus_unregister_event_handler(g_ubus, &g_net_event_handler);
+}
+
 int main(int argc, char **argv) {
   struct tumgrd_config cfg;
   int                  err       = -1;
@@ -197,6 +214,7 @@ int main(int argc, char **argv) {
   g_ubus = try2_p(ubus_connect(cfg.socket_path), "[main] ubus_connect failed");
   ubus_add_uloop(g_ubus);
 
+  try2(tumgrd_init_ubus_events(), "[main] failed to init ubus events");
   try2(tumgrd_ubus_init(g_ubus, &g_ctx), "[main] tumgrd_ubus_init failed");
 
   g_startup_reconcile_timer.cb  = tumgrd_startup_reconcile_timer_cb;
@@ -214,6 +232,8 @@ int main(int argc, char **argv) {
 
 err_cleanup:
   tumgrd_ubus_cleanup();
+  tumgrd_cleanup_ubus_events();
+
   if (g_ubus) {
     ubus_free(g_ubus);
     g_ubus = NULL;
