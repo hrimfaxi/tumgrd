@@ -1,5 +1,6 @@
 #include "helper.h"
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -25,6 +26,30 @@ bool streqcase(const char *a, const char *b) {
 
 bool streq(const char *a, const char *b) {
   return strcmp(a, b) == 0;
+}
+
+void trim_inplace(char *s) {
+  char *start;
+  char *end;
+
+  if (!s || s[0] == '\0') {
+    return;
+  }
+
+  start = s;
+  while (*start && isspace((unsigned char) *start)) {
+    start++;
+  }
+
+  if (start != s) {
+    memmove(s, start, strlen(start) + 1);
+  }
+
+  end = s + strlen(s);
+  while (end > s && isspace((unsigned char) end[-1])) {
+    end--;
+  }
+  *end = '\0';
 }
 
 // vim: set sw=2 ts=2 et:

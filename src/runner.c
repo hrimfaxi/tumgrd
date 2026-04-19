@@ -13,30 +13,6 @@
 #define TUMGRD_TUCTL_CLIENT_BIN "tuctl_client"
 #define TUMGRD_KTUCTL_BIN       "ktuctl"
 
-static void tumgrd_trim_inplace(char *s) {
-  char *start;
-  char *end;
-
-  if (!s || s[0] == '\0') {
-    return;
-  }
-
-  start = s;
-  while (*start && isspace((unsigned char) *start)) {
-    start++;
-  }
-
-  if (start != s) {
-    memmove(s, start, strlen(start) + 1);
-  }
-
-  end = s + strlen(s);
-  while (end > s && isspace((unsigned char) end[-1])) {
-    end--;
-  }
-  *end = '\0';
-}
-
 static void tumgrd_sanitize_comment(const char *src, char *dst, size_t dst_len) {
   size_t i;
   size_t j = 0;
@@ -59,7 +35,7 @@ static void tumgrd_sanitize_comment(const char *src, char *dst, size_t dst_len) 
   }
 
   dst[j] = '\0';
-  tumgrd_trim_inplace(dst);
+  trim_inplace(dst);
 }
 
 static const char *tumgrd_ip_version_flag(const char *ip_version) {
@@ -272,8 +248,8 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   rc = tumgrd_exec_with_stdio(argv, script, node->has_memlimit, node->memlimit, stdout_buf, sizeof(stdout_buf), stderr_buf,
                               sizeof(stderr_buf));
 
-  tumgrd_trim_inplace(stdout_buf);
-  tumgrd_trim_inplace(stderr_buf);
+  trim_inplace(stdout_buf);
+  trim_inplace(stderr_buf);
   log_info("[runner] tuctl_client uid=%s server=%s:%d client_port=%d rc=%d stdout=%s stderr=%s", node->uid, node->server_host,
            node->server_port, node->client_port, rc, stdout_buf, stderr_buf);
 
@@ -300,8 +276,8 @@ static int tumgrd_run_ktuctl(char *const argv[]) {
 
   rc = tumgrd_exec_with_stdio(argv, NULL, 0, 0, stdout_buf, sizeof(stdout_buf), stderr_buf, sizeof(stderr_buf));
 
-  tumgrd_trim_inplace(stdout_buf);
-  tumgrd_trim_inplace(stderr_buf);
+  trim_inplace(stdout_buf);
+  trim_inplace(stderr_buf);
   log_info("[runner] ktuctl rc=%d stdout=%s stderr=%s", rc, stdout_buf, stderr_buf);
 
   return rc;
@@ -327,7 +303,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
   {
     char *temp = strdup(script);
     if (temp) {
-      tumgrd_trim_inplace(temp);
+      trim_inplace(temp);
       log_info("[runner] server add stdin: %s", temp);
     }
     free(temp);
@@ -347,7 +323,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
   {
     char *temp = strdup(script);
     if (temp) {
-      tumgrd_trim_inplace(temp);
+      trim_inplace(temp);
       log_info("[runner] server del stdin: %s", temp);
     }
     free(temp);
