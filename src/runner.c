@@ -13,19 +13,6 @@
 #define TUMGRD_TUCTL_CLIENT_BIN "tuctl_client"
 #define TUMGRD_KTUCTL_BIN       "ktuctl"
 
-static void tumgrd_copy_string(char *dst, size_t dst_len, const char *src) {
-  if (!dst || dst_len == 0) {
-    return;
-  }
-
-  if (!src) {
-    dst[0] = '\0';
-    return;
-  }
-
-  snprintf(dst, dst_len, "%s", src);
-}
-
 static void tumgrd_trim_inplace(char *s) {
   char *start;
   char *end;
