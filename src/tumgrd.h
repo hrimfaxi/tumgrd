@@ -6,10 +6,6 @@
 #include <libubus.h>
 #include <stdbool.h>
 
-static inline const char *nonempty_or_default(const char *input, const char *def_str) {
-  return input ? input : def_str;
-}
-
 struct tumgrd_ctx {
   struct tumgrd_db          db;
   struct tumgrd_config      cfg;

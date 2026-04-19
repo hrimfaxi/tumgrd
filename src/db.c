@@ -1,4 +1,5 @@
 #include "db.h"
+#include "helper.h"
 #include "log.h"
 #include "tumgrd.h"
 
@@ -13,26 +14,6 @@
 
 static int64_t tumgrd_now_unix(void) {
   return (int64_t) time(NULL);
-}
-
-static void tumgrd_copy_string(char *dst, size_t dst_len, const char *src) {
-  if (!dst || dst_len == 0) {
-    return;
-  }
-
-  if (!src) {
-    dst[0] = '\0';
-    return;
-  }
-
-  snprintf(dst, dst_len, "%s", src);
-}
-
-static const char *tumgrd_nonempty_or_null(const char *s) {
-  if (!s || s[0] == '\0') {
-    return NULL;
-  }
-  return s;
 }
 
 static void tumgrd_sqlite_log_error(sqlite3 *conn, const char *where, int err) {
@@ -66,7 +47,7 @@ static void tumgrd_column_text(sqlite3_stmt *stmt, int col, char *dst, size_t ds
   }
 
   text = sqlite3_column_text(stmt, col);
-  tumgrd_copy_string(dst, dst_len, (const char *) text);
+  copy_string(dst, dst_len, (const char *) text);
 }
 
 static int tumgrd_row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
@@ -182,7 +163,7 @@ int tumgrd_db_open(struct tumgrd_db *db, const char *path) {
   memset(db, 0, sizeof(*db));
 
   db_path = (path && path[0] != '\0') ? path : TUMGRD_DB_PATH;
-  tumgrd_copy_string(db->path, sizeof(db->path), db_path);
+  copy_string(db->path, sizeof(db->path), db_path);
 
   if (tumgrd_ensure_parent_dir(db->path) != 0) {
     log_error("[db] ensure parent dir failed for %s: %s", db->path, strerror(errno));
@@ -296,11 +277,11 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   }
 
   if (n.ip_check_url[0] == '\0') {
-    tumgrd_copy_string(n.ip_check_url, sizeof(n.ip_check_url), TUMGRD_DEFAULT_IP_CHECK_URL);
+    copy_string(n.ip_check_url, sizeof(n.ip_check_url), TUMGRD_DEFAULT_IP_CHECK_URL);
   }
 
   if (n.status[0] == '\0') {
-    tumgrd_copy_string(n.status, sizeof(n.status), TUMGRD_STATUS_ACTIVE);
+    copy_string(n.status, sizeof(n.status), TUMGRD_STATUS_ACTIVE);
   }
 
   err = sqlite3_prepare_v2(db->conn, sql, -1, &stmt, NULL);
@@ -310,19 +291,19 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   }
 
   err = tumgrd_bind_required_text(stmt, 1, n.uid);
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 2, tumgrd_nonempty_or_null(n.description)) : err;
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 3, tumgrd_nonempty_or_null(n.client_comment)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 2, nonempty_or_null(n.description)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 3, nonempty_or_null(n.client_comment)) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int64(stmt, 4, (sqlite3_int64) n.created_at) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 5, n.server_host) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int(stmt, 6, n.server_port) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 7, n.psk) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int(stmt, 8, n.client_port) : err;
   err = err == SQLITE_OK ? (n.has_memlimit ? sqlite3_bind_int(stmt, 9, n.memlimit) : sqlite3_bind_null(stmt, 9)) : err;
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 10, tumgrd_nonempty_or_null(n.ip_check_url)) : err;
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 11, tumgrd_nonempty_or_null(n.ip_version)) : err;
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 12, tumgrd_nonempty_or_null(n.current_ip)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 10, nonempty_or_null(n.ip_check_url)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 11, nonempty_or_null(n.ip_version)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 12, nonempty_or_null(n.current_ip)) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int64(stmt, 13, (sqlite3_int64) n.last_updated) : err;
-  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 14, tumgrd_nonempty_or_null(n.status)) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_text_or_null(stmt, 14, nonempty_or_null(n.status)) : err;
 
   if (err != SQLITE_OK) {
     tumgrd_sqlite_log_error(db->conn, "bind(upsert)", err);
@@ -533,7 +514,7 @@ int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int 
     return -1;
   }
 
-  err = tumgrd_bind_text_or_null(stmt, 1, tumgrd_nonempty_or_null(current_ip));
+  err = tumgrd_bind_text_or_null(stmt, 1, nonempty_or_null(current_ip));
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 2, status) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int64(stmt, 3, (sqlite3_int64) last_updated) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 4, server_host) : err;

@@ -2,6 +2,7 @@
 #include "log.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -69,6 +70,30 @@ void log_trimmed(const char *tag, const char *script) {
   trim_inplace(tmp);
   log_info("%s: %s", tag, tmp);
   free(tmp);
+}
+
+void copy_string(char *dst, size_t dst_len, const char *src) {
+  if (!dst || dst_len == 0) {
+    return;
+  }
+
+  if (!src) {
+    dst[0] = '\0';
+    return;
+  }
+
+  snprintf(dst, dst_len, "%s", src);
+}
+
+const char *nonempty_or_default(const char *input, const char *def_str) {
+  if (!input || input[0] == '\0') {
+    return def_str;
+  }
+  return input;
+}
+
+const char *nonempty_or_null(const char *input) {
+  return nonempty_or_default(input, NULL);
 }
 
 // vim: set sw=2 ts=2 et:

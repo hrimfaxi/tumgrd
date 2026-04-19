@@ -289,9 +289,9 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     return -1;
   }
 
-  int   err = -1;
-  char *script = NULL;
-  char  comment[256] = {0};
+  int   err                 = -1;
+  char *script              = NULL;
+  char  comment[256]        = {0};
   char  comment_suffix[280] = {0};
 
   tumgrd_sanitize_comment(node->client_comment, comment, sizeof(comment));
@@ -299,8 +299,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     snprintf(comment_suffix, sizeof(comment_suffix), " comment %s", comment);
   }
 
-  try2(asprintf(&script, "server-add uid %s port %d address %s%s\n",
-                node->uid, node->client_port, current_ip, comment_suffix),
+  try2(asprintf(&script, "server-add uid %s port %d address %s%s\n", node->uid, node->client_port, current_ip, comment_suffix),
        "asprintf");
 
   log_trimmed("[runner] server add stdin", script);
@@ -317,7 +316,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
     return -1;
   }
 
-  int err = -1;
+  int   err    = -1;
   char *script = NULL;
 
   try2(asprintf(&script, "server-del uid %s\n", node->uid), "aprintf");
