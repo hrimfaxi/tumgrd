@@ -39,7 +39,7 @@ struct tumgrd_config {
   const char *socket_path;
   const char *client_bin;
   const char *log_level;
-  int         interval_sec;
+  uint32_t    interval_sec;
 };
 
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);

@@ -1,24 +1,41 @@
 #include "helper.h"
 #include "log.h"
+#include "try.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 
-int parse_interval(const char *s, int *out) {
-  char *end = NULL;
-  long  v   = strtol(s, &end, 10);
+static int parse_u32(const char *input, uint32_t *out_u32) {
+  char         *endptr = NULL;
+  unsigned long ulong_val;
 
-  if (!s || s[0] == '\0' || !end || *end != '\0') {
-    return -1;
+  errno     = 0; // 复位errno： strtoul函数本身不保证成功时设置errno=0
+  ulong_val = strtoul(input, &endptr, 0);
+  if (endptr == input || *endptr || errno == ERANGE || ulong_val > UINT32_MAX) {
+    // log_error("Invalid u32: %s", input);
+    return -EINVAL;
   }
-  if (v < 10 || v > 3600) {
-    return -1;
+
+  *out_u32 = (typeof(*out_u32)) ulong_val;
+  return 0;
+}
+
+int parse_interval(const char *input, uint32_t *out_interval) {
+  int err = parse_u32(input, out_interval);
+
+  if (err || *out_interval < 10 || *out_interval > 3600) {
+    log_error("Invalid interval: %s", input);
+    return -EINVAL;
   }
 
-  *out = (int) v;
   return 0;
 }
 
@@ -94,6 +111,75 @@ const char *nonempty_or_default(const char *input, const char *def_str) {
 
 const char *nonempty_or_null(const char *input) {
   return nonempty_or_default(input, NULL);
+}
+
+static int _mkdir_p(const char *dir, mode_t mode) {
+  char   tmp[PATH_MAX];
+  size_t len;
+  char  *p;
+
+  if (!dir || dir[0] == '\0') {
+    errno = EINVAL;
+    return -1;
+  }
+
+  len = strlen(dir);
+  if (len >= sizeof(tmp)) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+
+  copy_string(tmp, sizeof(tmp), dir);
+
+  if (tmp[len - 1] == '/') {
+    tmp[len - 1] = '\0';
+  }
+
+  for (p = tmp + 1; *p; p++) {
+    if (*p == '/') {
+      *p = '\0';
+      if (mkdir(tmp, mode) != 0 && errno != EEXIST) {
+        return -1;
+      }
+      *p = '/';
+    }
+  }
+
+  if (mkdir(tmp, mode) != 0 && errno != EEXIST) {
+    return -1;
+  }
+
+  return 0;
+}
+
+int ensure_parent_dir(const char *path) {
+  char  dir[PATH_MAX];
+  char *slash;
+
+  if (!path || path[0] == '\0') {
+    errno = EINVAL;
+    return -1;
+  }
+
+  if (strlen(path) >= sizeof(dir)) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+
+  copy_string(dir, sizeof(dir), path);
+
+  slash = strrchr(dir, '/');
+  if (!slash) {
+    return 0;
+  }
+
+  if (slash == dir) {
+    return 0;
+  }
+
+  *slash = '\0';
+
+  return _mkdir_p(dir, 0755);
 }
 
 // vim: set sw=2 ts=2 et:
