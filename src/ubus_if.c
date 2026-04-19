@@ -14,15 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
-
-/* =========================================================================
- * helpers
- * ========================================================================= */
-
-static bool tumgrd_blobmsg_get_bool_default(struct blob_attr *attr, bool defval) {
+static bool blobmsg_get_bool_default(struct blob_attr *attr, bool defval) {
   if (!attr) {
     return defval;
   }
@@ -327,8 +319,8 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
 
   blobmsg_parse(ref_policy, __REF_MAX, tb, blob_data(msg), blob_len(msg));
 
-  is_all   = tumgrd_blobmsg_get_bool_default(tb[REF_ALL], false);
-  is_force = tumgrd_blobmsg_get_bool_default(tb[REF_FORCE], false);
+  is_all   = blobmsg_get_bool_default(tb[REF_ALL], false);
+  is_force = blobmsg_get_bool_default(tb[REF_FORCE], false);
 
   blob_buf_init(&b, 0);
 
