@@ -4,386 +4,402 @@ UBUS_BIN="${UBUS_BIN:-ubus}"
 UBUS_OBJECT="${UBUS_OBJECT:-tumgrd}"
 
 usage() {
-	cat <<'EOF'
-Usage:
+  cat <<'EOF'
+  Usage:
   tumgr register -uid <uid> -server-host <host> -server-port <port> -client-port <port> -psk <psk> [-memlimit <n>] [-description <text>] [-ip-check-url <url>] [-ip-version <ipv4|ipv6>] [-socket <path>]
-  tumgr deregister -uid <uid> -server-host <host> -server-port <port> [-socket <path>]
-  tumgr refresh -uid <uid> -server-host <host> -server-port <port> [-force] [-socket <path>]
+  tumgr deregister -uid <uid> -server-host <host> -server-port <port> -ip-version <ipv4|ipv6> [-socket <path>]
+  tumgr refresh    -uid <uid> -server-host <host> -server-port <port> -ip-version <ipv4|ipv6> [-force] [-socket <path>]
   tumgr refresh -all [-force] [-socket <path>]
   tumgr status [-json] [-socket <path>]
   tumgr dump [-socket <path>]
 EOF
-	exit 1
+  exit 1
 }
 
 err() {
-	echo "tumgr: $*" >&2
-	exit 2
+  echo "tumgr: $*" >&2
+  exit 2
 }
 
 need_arg() {
-	opt="$1"
-	val="$2"
-	[ -n "$val" ] || err "missing required argument: $opt"
+  opt="$1"
+  val="$2"
+  [ -n "$val" ] || err "missing required argument: $opt"
 }
 
 is_uint() {
-	case "$1" in
-		''|*[!0-9]*)
-			return 1
-			;;
-		*)
-			return 0
-			;;
-	esac
+  case "$1" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
 }
 
 json_escape() {
-	printf '%s' "$1" | sed \
-	-e 's/\\/\\\\/g' \
-	-e 's/"/\\"/g' \
-	-e ':a;N;$!ba;s/\n/\\n/g'
+  printf '%s' "$1" | sed \
+  -e 's/\\/\\\\/g' \
+  -e 's/"/\\"/g' \
+  -e ':a;N;$!ba;s/\n/\\n/g'
 }
 
 ubus_call() {
-	method="$1"
-	payload="$2"
-	"$UBUS_BIN" call "$UBUS_OBJECT" "$method" "$payload"
+  method="$1"
+  payload="$2"
+  "$UBUS_BIN" call "$UBUS_OBJECT" "$method" "$payload"
 }
 
 cmd_register() {
-	uid=""
-	server_host=""
-	server_port=""
-	client_port=""
-	psk=""
-	memlimit=""
-	description=""
-	client_comment=""
-	ip_check_url=""
-	ip_version=""
-	socket_path=""
+  uid=""
+  server_host=""
+  server_port=""
+  client_port=""
+  psk=""
+  memlimit=""
+  description=""
+  client_comment=""
+  ip_check_url=""
+  ip_version=""
+  socket_path=""
 
-	while [ $# -gt 0 ]; do
-		case "$1" in
-			-uid|-u)
-				[ $# -ge 2 ] || err "option -uid requires an argument"
-				uid="$2"
-				shift 2
-				;;
-			-server-host|-H)
-				[ $# -ge 2 ] || err "option -server-host requires an argument"
-				server_host="$2"
-				shift 2
-				;;
-			-server-port|-S)
-				[ $# -ge 2 ] || err "option -server-port requires an argument"
-				server_port="$2"
-				shift 2
-				;;
-			-client-port|-p)
-				[ $# -ge 2 ] || err "option -client-port requires an argument"
-				client_port="$2"
-				shift 2
-				;;
-			-psk|-k)
-				[ $# -ge 2 ] || err "option -psk requires an argument"
-				psk="$2"
-				shift 2
-				;;
-			-memlimit|-m)
-				[ $# -ge 2 ] || err "option -memlimit requires an argument"
-				memlimit="$2"
-				shift 2
-				;;
-			-description|-d)
-				[ $# -ge 2 ] || err "option -description requires an argument"
-				description="$2"
-				shift 2
-				;;
-			-client-comment|-c)
-				[ $# -ge 2 ] || err "option -client-comment requires an argument"
-				client_comment="$2"
-				shift 2
-				;;
-			-ip-check-url|-i)
-				[ $# -ge 2 ] || err "option -ip-check-url requires an argument"
-				ip_check_url="$2"
-				shift 2
-				;;
-			-ip-version|-V)
-				[ $# -ge 2 ] || err "option -ip-version requires an argument"
-				ip_version="$2"
-				shift 2
-				;;
-			-socket|-s)
-				[ $# -ge 2 ] || err "option -socket requires an argument"
-				socket_path="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				;;
-			*)
-				err "unknown option for register: $1"
-				;;
-		esac
-	done
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -uid|-u)
+        [ $# -ge 2 ] || err "option -uid requires an argument"
+        uid="$2"
+        shift 2
+        ;;
+      -server-host|-H)
+        [ $# -ge 2 ] || err "option -server-host requires an argument"
+        server_host="$2"
+        shift 2
+        ;;
+      -server-port|-S)
+        [ $# -ge 2 ] || err "option -server-port requires an argument"
+        server_port="$2"
+        shift 2
+        ;;
+      -client-port|-p)
+        [ $# -ge 2 ] || err "option -client-port requires an argument"
+        client_port="$2"
+        shift 2
+        ;;
+      -psk|-k)
+        [ $# -ge 2 ] || err "option -psk requires an argument"
+        psk="$2"
+        shift 2
+        ;;
+      -memlimit|-m)
+        [ $# -ge 2 ] || err "option -memlimit requires an argument"
+        memlimit="$2"
+        shift 2
+        ;;
+      -description|-d)
+        [ $# -ge 2 ] || err "option -description requires an argument"
+        description="$2"
+        shift 2
+        ;;
+      -client-comment|-c)
+        [ $# -ge 2 ] || err "option -client-comment requires an argument"
+        client_comment="$2"
+        shift 2
+        ;;
+      -ip-check-url|-i)
+        [ $# -ge 2 ] || err "option -ip-check-url requires an argument"
+        ip_check_url="$2"
+        shift 2
+        ;;
+      -ip-version|-V)
+        [ $# -ge 2 ] || err "option -ip-version requires an argument"
+        ip_version="$2"
+        shift 2
+        ;;
+      -socket|-s)
+        [ $# -ge 2 ] || err "option -socket requires an argument"
+        socket_path="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        ;;
+      *)
+        err "unknown option for register: $1"
+        ;;
+    esac
+  done
 
-	need_arg "-uid" "$uid"
-	need_arg "-server-host" "$server_host"
-	need_arg "-server-port" "$server_port"
-	need_arg "-client-port" "$client_port"
-	need_arg "-psk" "$psk"
+  need_arg "-uid" "$uid"
+  need_arg "-server-host" "$server_host"
+  need_arg "-server-port" "$server_port"
+  need_arg "-client-port" "$client_port"
+  need_arg "-psk" "$psk"
 
-	is_uint "$server_port" || err "-server-port must be an integer"
-	is_uint "$client_port" || err "-client-port must be an integer"
+  is_uint "$server_port" || err "-server-port must be an integer"
+  is_uint "$client_port" || err "-client-port must be an integer"
 
-	if [ -n "$memlimit" ]; then
-		is_uint "$memlimit" || err "-memlimit must be an integer"
-	else
-		memlimit=0
-	fi
+  if [ -n "$memlimit" ]; then
+    is_uint "$memlimit" || err "-memlimit must be an integer"
+  else
+    memlimit=0
+  fi
 
-	payload="{"
-	payload="$payload\"uid\":\"$(json_escape "$uid")\""
-	payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
-	payload="$payload,\"server_port\":$server_port"
-	payload="$payload,\"client_port\":$client_port"
-	payload="$payload,\"psk\":\"$(json_escape "$psk")\""
-	payload="$payload,\"memlimit\":$memlimit"
+  payload="{"
+  payload="$payload\"uid\":\"$(json_escape "$uid")\""
+  payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
+  payload="$payload,\"server_port\":$server_port"
+  payload="$payload,\"client_port\":$client_port"
+  payload="$payload,\"psk\":\"$(json_escape "$psk")\""
+  payload="$payload,\"memlimit\":$memlimit"
 
-	if [ -n "$description" ]; then
-		payload="$payload,\"description\":\"$(json_escape "$description")\""
-	fi
+  if [ -n "$description" ]; then
+    payload="$payload,\"description\":\"$(json_escape "$description")\""
+  fi
 
-	if [ -n "$client_comment" ]; then
-		payload="$payload,\"client_comment\":\"$(json_escape "$client_comment")\""
-	fi
+  if [ -n "$client_comment" ]; then
+    payload="$payload,\"client_comment\":\"$(json_escape "$client_comment")\""
+  fi
 
-	if [ -n "$ip_check_url" ]; then
-		payload="$payload,\"ip_check_url\":\"$(json_escape "$ip_check_url")\""
-	fi
+  if [ -n "$ip_check_url" ]; then
+    payload="$payload,\"ip_check_url\":\"$(json_escape "$ip_check_url")\""
+  fi
 
-	if [ -n "$ip_version" ]; then
-		payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
-	fi
+  if [ -n "$ip_version" ]; then
+    payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
+  fi
 
-	payload="$payload}"
+  payload="$payload}"
 
-	ubus_call register "$payload"
+  ubus_call register "$payload"
 }
 
 cmd_deregister() {
-	uid=""
-	server_host=""
-	server_port=""
-	socket_path=""
+  uid=""
+  server_host=""
+  server_port=""
+  ip_version=""
+  socket_path=""
 
-	while [ $# -gt 0 ]; do
-		case "$1" in
-			-uid|-u)
-				[ $# -ge 2 ] || err "option -uid requires an argument"
-				uid="$2"
-				shift 2
-				;;
-			-server-host|-H)
-				[ $# -ge 2 ] || err "option -server-host requires an argument"
-				server_host="$2"
-				shift 2
-				;;
-			-server-port|-S)
-				[ $# -ge 2 ] || err "option -server-port requires an argument"
-				server_port="$2"
-				shift 2
-				;;
-			-socket|-s)
-				[ $# -ge 2 ] || err "option -socket requires an argument"
-				socket_path="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				;;
-			*)
-				err "unknown option for deregister: $1"
-				;;
-		esac
-	done
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -uid|-u)
+        [ $# -ge 2 ] || err "option -uid requires an argument"
+        uid="$2"
+        shift 2
+        ;;
+      -server-host|-H)
+        [ $# -ge 2 ] || err "option -server-host requires an argument"
+        server_host="$2"
+        shift 2
+        ;;
+      -server-port|-S)
+        [ $# -ge 2 ] || err "option -server-port requires an argument"
+        server_port="$2"
+        shift 2
+        ;;
+      -ip-version|-V)
+        [ $# -ge 2 ] || err "option -ip-version requires an argument"
+        ip_version="$2"
+        shift 2
+        ;;
+      -socket|-s)
+        [ $# -ge 2 ] || err "option -socket requires an argument"
+        socket_path="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        ;;
+      *)
+        err "unknown option for deregister: $1"
+        ;;
+    esac
+  done
 
-	need_arg "-uid" "$uid"
-	need_arg "-server-host" "$server_host"
-	need_arg "-server-port" "$server_port"
+  need_arg "-uid" "$uid"
+  need_arg "-server-host" "$server_host"
+  need_arg "-server-port" "$server_port"
+  need_arg "-ip-version" "$ip_version"
 
-	is_uint "$server_port" || err "-server-port must be an integer"
+  is_uint "$server_port" || err "-server-port must be an integer"
 
-	payload="{"
-	payload="$payload\"uid\":\"$(json_escape "$uid")\""
-	payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
-	payload="$payload,\"server_port\":$server_port"
-	payload="$payload}"
+  payload="{"
+  payload="$payload\"uid\":\"$(json_escape "$uid")\""
+  payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
+  payload="$payload,\"server_port\":$server_port"
+  payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
+  payload="$payload}"
 
-	ubus_call deregister "$payload"
+  ubus_call deregister "$payload"
 }
 
 cmd_refresh() {
-	uid=""
-	server_host=""
-	server_port=""
-	force="false"
-	all="false"
-	socket_path=""
+  uid=""
+  server_host=""
+  server_port=""
+  force="false"
+  all="false"
+  ip_version=""
+  socket_path=""
 
-	while [ $# -gt 0 ]; do
-		case "$1" in
-			-uid|-u)
-				[ $# -ge 2 ] || err "option -uid requires an argument"
-				uid="$2"
-				shift 2
-				;;
-			-server-host|-H)
-				[ $# -ge 2 ] || err "option -server-host requires an argument"
-				server_host="$2"
-				shift 2
-				;;
-			-server-port|-S)
-				[ $# -ge 2 ] || err "option -server-port requires an argument"
-				server_port="$2"
-				shift 2
-				;;
-			-all|-a)
-				all="true"
-				shift 1
-				;;
-			-force|-f)
-				force="true"
-				shift 1
-				;;
-			-socket|-s)
-				[ $# -ge 2 ] || err "option -socket requires an argument"
-				socket_path="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				;;
-			*)
-				err "unknown option for refresh: $1"
-				;;
-		esac
-	done
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -uid|-u)
+        [ $# -ge 2 ] || err "option -uid requires an argument"
+        uid="$2"
+        shift 2
+        ;;
+      -server-host|-H)
+        [ $# -ge 2 ] || err "option -server-host requires an argument"
+        server_host="$2"
+        shift 2
+        ;;
+      -server-port|-S)
+        [ $# -ge 2 ] || err "option -server-port requires an argument"
+        server_port="$2"
+        shift 2
+        ;;
+      -ip-version|-V)
+        [ $# -ge 2 ] || err "option -ip-version requires an argument"
+        ip_version="$2"
+        shift 2
+        ;;
+      -all|-a)
+        all="true"
+        shift 1
+        ;;
+      -force|-f)
+        force="true"
+        shift 1
+        ;;
+      -socket|-s)
+        [ $# -ge 2 ] || err "option -socket requires an argument"
+        socket_path="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        ;;
+      *)
+        err "unknown option for refresh: $1"
+        ;;
+    esac
+  done
 
-	# 检查参数组合：如果使用 -all，则不需要 uid/host/port
-	if [ "$all" = "true" ]; then
-		: # all 模式下不需要检查 uid/host/port
-	else
-		need_arg "-uid" "$uid"
-		need_arg "-server-host" "$server_host"
-		need_arg "-server-port" "$server_port"
-		is_uint "$server_port" || err "-server-port must be an integer"
-	fi
+  # 检查参数组合：如果使用 -all，则不需要 uid/host/port
+  if [ "$all" = "true" ]; then
+    : # all 模式下不需要检查 uid/host/port
+  else
+    need_arg "-uid" "$uid"
+    need_arg "-server-host" "$server_host"
+    need_arg "-server-port" "$server_port"
+    need_arg "-ip-version" "$ip_version"
+    is_uint "$server_port" || err "-server-port must be an integer"
+  fi
 
-	payload="{"
-	if [ "$all" = "true" ]; then
-		payload="$payload\"all\":true"
-	else
-		payload="$payload\"uid\":\"$(json_escape "$uid")\""
-		payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
-		payload="$payload,\"server_port\":$server_port"
-	fi
-	payload="$payload,\"force\":$force"
-	payload="$payload}"
+  payload="{"
+  if [ "$all" = "true" ]; then
+    payload="$payload\"all\":true"
+  else
+    payload="$payload\"uid\":\"$(json_escape "$uid")\""
+    payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
+    payload="$payload,\"server_port\":$server_port"
+    payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
+  fi
+  payload="$payload,\"force\":$force"
+  payload="$payload}"
 
-	ubus_call refresh "$payload"
+  ubus_call refresh "$payload"
 }
 
 cmd_status() {
-	json_output="false"
-	socket_path=""
+  json_output="false"
+  socket_path=""
 
-	while [ $# -gt 0 ]; do
-		case "$1" in
-			-json|-j)
-				json_output="true"
-				shift 1
-				;;
-			-socket|-s)
-				[ $# -ge 2 ] || err "option -socket requires an argument"
-				socket_path="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				;;
-			*)
-				err "unknown option for status: $1"
-				;;
-		esac
-	done
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -json|-j)
+        json_output="true"
+        shift 1
+        ;;
+      -socket|-s)
+        [ $# -ge 2 ] || err "option -socket requires an argument"
+        socket_path="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        ;;
+      *)
+        err "unknown option for status: $1"
+        ;;
+    esac
+  done
 
-	payload="{}"
-	if [ "$json_output" = "true" ]; then
-		# ubus 调用本身返回 JSON，这里只是标记需要原始 JSON 输出
-		# 实际处理由调用者决定，ubus_call 直接返回 JSON
-		:
-	fi
+  payload="{}"
+  if [ "$json_output" = "true" ]; then
+    # ubus 调用本身返回 JSON，这里只是标记需要原始 JSON 输出
+    # 实际处理由调用者决定，ubus_call 直接返回 JSON
+    :
+  fi
 
-	ubus_call status "$payload"
+  ubus_call status "$payload"
 }
 
 cmd_dump() {
-	socket_path=""
+  socket_path=""
 
-	while [ $# -gt 0 ]; do
-		case "$1" in
-			-socket|-s)
-				[ $# -ge 2 ] || err "option -socket requires an argument"
-				socket_path="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				;;
-			*)
-				err "unknown option for dump: $1"
-				;;
-		esac
-	done
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -socket|-s)
+        [ $# -ge 2 ] || err "option -socket requires an argument"
+        socket_path="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        ;;
+      *)
+        err "unknown option for dump: $1"
+        ;;
+    esac
+  done
 
-	ubus_call dump '{}'
+  ubus_call dump '{}'
 }
 
 main() {
-	[ $# -ge 1 ] || usage
+  [ $# -ge 1 ] || usage
 
-	case "$1" in
-		register)
-			shift
-			cmd_register "$@"
-			;;
-		deregister)
-			shift
-			cmd_deregister "$@"
-			;;
-		refresh)
-			shift
-			cmd_refresh "$@"
-			;;
-		status)
-			shift
-			cmd_status "$@"
-			;;
-		dump)
-			shift
-			cmd_dump "$@"
-			;;
-		-h|--help|help)
-			usage
-			;;
-		*)
-			err "unknown command: $1"
-			;;
-	esac
+  case "$1" in
+    register)
+      shift
+      cmd_register "$@"
+      ;;
+    deregister)
+      shift
+      cmd_deregister "$@"
+      ;;
+    refresh)
+      shift
+      cmd_refresh "$@"
+      ;;
+    status)
+      shift
+      cmd_status "$@"
+      ;;
+    dump)
+      shift
+      cmd_dump "$@"
+      ;;
+    -h|--help|help)
+      usage
+      ;;
+    *)
+      err "unknown command: $1"
+      ;;
+  esac
 }
 
 main "$@"
