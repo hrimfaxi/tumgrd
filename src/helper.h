@@ -6,5 +6,6 @@ int  parse_interval(const char *s, int *out);
 bool streqcase(const char *a, const char *b);
 bool streq(const char *a, const char *b);
 void trim_inplace(char *s);
+void log_trimmed(const char *tag, const char *script);
 
 // vim: set sw=2 ts=2 et:

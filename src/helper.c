@@ -1,4 +1,5 @@
 #include "helper.h"
+#include "log.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -50,6 +51,24 @@ void trim_inplace(char *s) {
     end--;
   }
   *end = '\0';
+}
+
+void log_trimmed(const char *tag, const char *script) {
+  if (!script) {
+    log_info("%s: (null)", tag);
+    return;
+  }
+
+  char *tmp = strdup(script);
+
+  if (!tmp) {
+    log_error("%s: strdup failed", tag);
+    return;
+  }
+
+  trim_inplace(tmp);
+  log_info("%s: %s", tag, tmp);
+  free(tmp);
 }
 
 // vim: set sw=2 ts=2 et:

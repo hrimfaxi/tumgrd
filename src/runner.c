@@ -300,14 +300,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     snprintf(script, sizeof(script), "server-add uid %s port %d address %s\n", node->uid, node->client_port, current_ip);
   }
 
-  {
-    char *temp = strdup(script);
-    if (temp) {
-      trim_inplace(temp);
-      log_info("[runner] server add stdin: %s", temp);
-    }
-    free(temp);
-  }
+  log_trimmed("[runner] server add stdin", script);
   return tumgrd_run_tuctl_script(node, script, "server updated:");
 }
 
@@ -319,15 +312,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
   }
 
   snprintf(script, sizeof(script), "server-del uid %s\n", node->uid);
-
-  {
-    char *temp = strdup(script);
-    if (temp) {
-      trim_inplace(temp);
-      log_info("[runner] server del stdin: %s", temp);
-    }
-    free(temp);
-  }
+  log_trimmed("[runner] server del stdin", script);
 
   return tumgrd_run_tuctl_script(node, script, "server deleted:");
 }
