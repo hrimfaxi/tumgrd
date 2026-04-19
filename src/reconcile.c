@@ -36,6 +36,7 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
   int     ret;
   int     ip_changed;
   int     need_apply;
+  int     was_error;
 
   if (!db || !node) {
     return -1;
@@ -60,10 +61,11 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
   }
 
   ip_changed = !streqcase(node->current_ip, detected_ip);
-  need_apply = force || ip_changed;
+  was_error  = streq(node->status, TUMGRD_STATUS_ERROR);
+  need_apply = force || ip_changed || was_error;
 
-  log_info("[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d need_apply=%d", node->uid, detected_ip, node->current_ip,
-           ip_changed ? 1 : 0, need_apply ? 1 : 0);
+  log_info("[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d was_error=%d need_apply=%d", node->uid, detected_ip,
+           node->current_ip, ip_changed ? 1 : 0, was_error ? 1 : 0, need_apply ? 1 : 0);
 
   if (need_apply) {
     ret = tumgrd_runner_server_add(node, detected_ip);
@@ -129,3 +131,5 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
   log_info("[reconcile] reconcile_all done");
   return 0;
 }
+
+// vim: set sw=2 ts=2 et:
