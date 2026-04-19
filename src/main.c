@@ -1,4 +1,5 @@
 #include "db.h"
+#include "helper.h"
 #include "log.h"
 #include "reconcile.h"
 #include "try.h"
@@ -47,21 +48,6 @@ static void usage(FILE *out, const char *prog) {
           "  -h, --help               show this help\n",
           prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_CLIENT_BIN,
           DEFAULT_LOG_LEVEL);
-}
-
-static int parse_interval(const char *s, int *out) {
-  char *end = NULL;
-  long  v   = strtol(s, &end, 10);
-
-  if (!s || s[0] == '\0' || !end || *end != '\0') {
-    return -1;
-  }
-  if (v < 10 || v > 3600) {
-    return -1;
-  }
-
-  *out = (int) v;
-  return 0;
 }
 
 static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
@@ -138,23 +124,23 @@ static int parse_log_level(const char *s, int *out) {
     return -1;
   }
 
-  if (strcasecmp(s, "error") == 0) {
+  if (streqcase(s, "error")) {
     *out = LOG_ERROR;
     return 0;
   }
-  if (strcasecmp(s, "warn") == 0) {
+  if (streqcase(s, "warn")) {
     *out = LOG_WARN;
     return 0;
   }
-  if (strcasecmp(s, "info") == 0) {
+  if (streqcase(s, "info")) {
     *out = LOG_INFO;
     return 0;
   }
-  if (strcasecmp(s, "debug") == 0) {
+  if (streqcase(s, "debug")) {
     *out = LOG_DEBUG;
     return 0;
   }
-  if (strcasecmp(s, "trace") == 0) {
+  if (streqcase(s, "trace")) {
     *out = LOG_TRACE;
     return 0;
   }
@@ -165,7 +151,7 @@ static int parse_log_level(const char *s, int *out) {
 int main(int argc, char **argv) {
   int               err       = -1;
   bool              db_opened = false;
-  struct tumgrd_ctx ctx = {};
+  struct tumgrd_ctx ctx       = {};
 
   tumgrd_config_init(&ctx.cfg);
   err = parse_args(argc, argv, &ctx.cfg);

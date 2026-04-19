@@ -1,4 +1,5 @@
 #include "runner.h"
+#include "helper.h"
 #include "log.h"
 
 #include <ctype.h>
@@ -79,11 +80,11 @@ static const char *tumgrd_ip_version_flag(const char *ip_version) {
     return NULL;
   }
 
-  if (strcmp(ip_version, "4") == 0 || strcmp(ip_version, "ipv4") == 0 || strcmp(ip_version, "-4") == 0) {
+  if (streq(ip_version, "4") || streq(ip_version, "ipv4") || streq(ip_version, "-4")) {
     return "-4";
   }
 
-  if (strcmp(ip_version, "6") == 0 || strcmp(ip_version, "ipv6") == 0 || strcmp(ip_version, "-6") == 0) {
+  if (streq(ip_version, "6") || streq(ip_version, "ipv6") || streq(ip_version, "-6")) {
     return "-6";
   }
 

@@ -1,4 +1,5 @@
 #include "ubus_if.h"
+#include "helper.h"
 #include "log.h"
 
 #include "reconcile.h"
@@ -510,7 +511,7 @@ static bool is_wan_interface(const char *ifname) {
     return false;
 
   for (int i = 0; wan_interfaces[i]; i++) {
-    if (strcmp(ifname, wan_interfaces[i]) == 0)
+    if (streq(ifname, wan_interfaces[i]))
       return true;
   }
   return false;
@@ -547,7 +548,7 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
   log_debug("[ubus] network.interface %s %s", ifname, action);
 
   /* 只处理 ifup 事件，且接口匹配 */
-  if (strcmp(action, "ifup") == 0 && is_wan_interface(ifname)) {
+  if (streq(action, "ifup") && is_wan_interface(ifname)) {
     log_info("[ubus] WAN interface %s up, force reconcile", ifname);
     tumgrd_reconcile_all(&tctx->db, true);
   }

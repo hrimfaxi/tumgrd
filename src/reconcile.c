@@ -1,4 +1,5 @@
 #include "reconcile.h"
+#include "helper.h"
 
 #include "ipdetect.h"
 #include "log.h"
@@ -58,7 +59,7 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
     return -1;
   }
 
-  ip_changed = strcmp(node->current_ip, detected_ip) != 0;
+  ip_changed = !streqcase(node->current_ip, detected_ip);
   need_apply = force || ip_changed;
 
   log_info("[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d need_apply=%d", node->uid, detected_ip, node->current_ip,

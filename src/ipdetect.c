@@ -1,4 +1,5 @@
 #include "ipdetect.h"
+#include "helper.h"
 #include "log.h"
 #include "tumgrd.h"
 
@@ -52,11 +53,11 @@ static int tumgrd_ip_family_from_version(const char *ip_version) {
     return 0;
   }
 
-  if (strcmp(ip_version, "ipv4") == 0) {
+  if (streqcase(ip_version, "ipv4")) {
     return 4;
   }
 
-  if (strcmp(ip_version, "ipv6") == 0) {
+  if (streqcase(ip_version, "ipv6")) {
     return 6;
   }
 
@@ -320,7 +321,7 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
    * 优先使用本地连接探测方法（无需外部 HTTP 服务）
    */
   int family = tumgrd_ip_family_from_version(ip_version);
-  if (family == 6 && (!url || url[0] == '\0' || strcmp(url, TUMGRD_DEFAULT_IP_CHECK_URL) == 0)) {
+  if (family == 6 && (!url || url[0] == '\0' || streq(url, TUMGRD_DEFAULT_IP_CHECK_URL))) {
     rc = tumgrd_detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
     if (rc == 0) {
       return 0;

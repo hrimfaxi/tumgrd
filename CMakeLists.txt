@@ -54,6 +54,7 @@ add_executable(tumgrd
   src/runner.c
   src/ipdetect.c
   src/ubus_if.c
+  src/helper.c
 )
 
 target_include_directories(tumgrd PRIVATE
