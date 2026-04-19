@@ -91,14 +91,14 @@ static void tumgrd_add_node_brief(struct blob_buf *b, const struct tumgrd_node *
  *  -1  数据库错误 / 参数错误
  */
 static int tumgrd_resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, int server_port,
-                               struct tumgrd_node *out) {
+                               const char *ip_version, struct tumgrd_node *out) {
   int rc;
 
-  if (!db || !uid || !server_host || !out) {
+  if (!db || !uid || !server_host || !ip_version || !out) {
     return -1;
   }
 
-  rc = tumgrd_db_get_node(db, server_host, server_port, uid, out);
+  rc = tumgrd_db_get_node(db, server_host, server_port, uid, ip_version, out);
   if (rc == 0) {
     return 0;
   }
@@ -163,7 +163,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   }
 
   get_rc = tumgrd_db_get_node(&tctx->db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
-                              blobmsg_get_string(tb[REG_UID]), &old_node);
+                              blobmsg_get_string(tb[REG_UID]), blobmsg_get_string(tb[REG_IP_VERSION]), &old_node);
 
   if (get_rc == 0) {
     node   = old_node;
@@ -227,12 +227,13 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
  * 2. deregister
  * ========================================================================= */
 
-enum { DEREG_UID, DEREG_SERVER_HOST, DEREG_SERVER_PORT, __DEREG_MAX };
+enum { DEREG_UID, DEREG_SERVER_HOST, DEREG_SERVER_PORT, DEREG_IP_VERSION, __DEREG_MAX };
 
 static const struct blobmsg_policy dereg_policy[__DEREG_MAX] = {
   [DEREG_UID]         = {.name = "uid", .type = BLOBMSG_TYPE_STRING},
   [DEREG_SERVER_HOST] = {.name = "server_host", .type = BLOBMSG_TYPE_STRING},
   [DEREG_SERVER_PORT] = {.name = "server_port", .type = BLOBMSG_TYPE_INT32},
+  [DEREG_IP_VERSION]  = {.name = "ip_version", .type = BLOBMSG_TYPE_STRING},
 };
 
 static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, struct ubus_request_data *req,
@@ -251,12 +252,13 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   blobmsg_parse(dereg_policy, __DEREG_MAX, tb, blob_data(msg), blob_len(msg));
 
-  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST] || !tb[DEREG_SERVER_PORT]) {
+  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST] || !tb[DEREG_SERVER_PORT] || !tb[DEREG_IP_VERSION]) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
   resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
-                                   (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), &node);
+                                   (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), blobmsg_get_string(tb[DEREG_IP_VERSION]),
+                                   &node);
 
   if (resolve_rc == 1) {
     tumgrd_reply_simple(ctx, req, "not_found", "node not found");
@@ -269,7 +271,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   rc_server = tumgrd_runner_server_del(&node);
   rc_client = tumgrd_runner_client_del(&node);
-  rc_db     = tumgrd_db_delete_node(&tctx->db, node.server_host, node.server_port, node.uid);
+  rc_db     = tumgrd_db_delete_node(&tctx->db, node.server_host, node.server_port, node.uid, node.ip_version);
 
   blob_buf_init(&b, 0);
 
@@ -297,12 +299,13 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
  * 3. refresh
  * ========================================================================= */
 
-enum { REF_UID, REF_SERVER_HOST, REF_SERVER_PORT, REF_FORCE, REF_ALL, __REF_MAX };
+enum { REF_UID, REF_SERVER_HOST, REF_SERVER_PORT, REF_IP_VERSION, REF_FORCE, REF_ALL, __REF_MAX };
 
 static const struct blobmsg_policy ref_policy[__REF_MAX] = {
   [REF_UID]         = {.name = "uid", .type = BLOBMSG_TYPE_STRING},
   [REF_SERVER_HOST] = {.name = "server_host", .type = BLOBMSG_TYPE_STRING},
   [REF_SERVER_PORT] = {.name = "server_port", .type = BLOBMSG_TYPE_INT32},
+  [REF_IP_VERSION]  = {.name = "ip_version", .type = BLOBMSG_TYPE_STRING},
   [REF_FORCE]       = {.name = "force", .type = BLOBMSG_TYPE_BOOL},
   [REF_ALL]         = {.name = "all", .type = BLOBMSG_TYPE_BOOL},
 };
@@ -338,7 +341,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     return UBUS_STATUS_OK;
   }
 
-  if (!tb[REF_UID] || !tb[REF_SERVER_HOST] || !tb[REF_SERVER_PORT]) {
+  if (!tb[REF_UID] || !tb[REF_SERVER_HOST] || !tb[REF_SERVER_PORT] || !tb[REF_IP_VERSION]) {
     blob_buf_free(&b);
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
@@ -348,7 +351,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     int                resolve_rc;
 
     resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
-                                     (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), &node);
+                                     (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), blobmsg_get_string(tb[REF_IP_VERSION]), &node);
 
     if (resolve_rc == 1) {
       blobmsg_add_string(&b, "status", "not_found");

@@ -201,8 +201,8 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
                            " current_ip TEXT,"
                            " last_updated INTEGER,"
                            " status TEXT DEFAULT 'active',"
-                           " PRIMARY KEY (server_host, server_port, uid),"
-                           " UNIQUE (server_host, server_port, client_port)"
+                           " PRIMARY KEY (server_host, server_port, uid, ip_version),"
+                           " UNIQUE (server_host, server_port, client_port, ip_version)"
                            ");";
 
   char *errmsg = NULL;
@@ -322,7 +322,7 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   return 0;
 }
 
-int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid, const char *ip_version,
                        struct tumgrd_node *out) {
   static const char *sql = "SELECT "
                            " uid, description, client_comment, created_at,"
@@ -330,7 +330,7 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
                            " memlimit, ip_check_url, ip_version, current_ip,"
                            " last_updated, status"
                            " FROM nodes"
-                           " WHERE server_host = ? AND server_port = ? AND uid = ?"
+                           " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
                            " LIMIT 1;";
 
   sqlite3_stmt *stmt = NULL;
@@ -349,6 +349,7 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
   err = tumgrd_bind_required_text(stmt, 1, server_host);
   err = err == SQLITE_OK ? sqlite3_bind_int(stmt, 2, server_port) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 3, uid) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 4, ip_version) : err;
 
   if (err != SQLITE_OK) {
     tumgrd_sqlite_log_error(db->conn, "bind(get)", err);
@@ -373,9 +374,10 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
   return -1;
 }
 
-int tumgrd_db_delete_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid) {
+int tumgrd_db_delete_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                          const char *ip_version) {
   static const char *sql = "DELETE FROM nodes"
-                           " WHERE server_host = ? AND server_port = ? AND uid = ?;";
+                           " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
 
   sqlite3_stmt *stmt = NULL;
   int           err;
@@ -394,6 +396,7 @@ int tumgrd_db_delete_node(struct tumgrd_db *db, const char *server_host, int ser
   err = tumgrd_bind_required_text(stmt, 1, server_host);
   err = err == SQLITE_OK ? sqlite3_bind_int(stmt, 2, server_port) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 3, uid) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 4, ip_version) : err;
 
   if (err != SQLITE_OK) {
     tumgrd_sqlite_log_error(db->conn, "bind(delete)", err);
@@ -496,10 +499,10 @@ void tumgrd_db_free_nodes(struct tumgrd_node *nodes) {
 }
 
 int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
-                             const char *current_ip, const char *status, int64_t last_updated) {
+                             const char *ip_version, const char *current_ip, const char *status, int64_t last_updated) {
   static const char *sql = "UPDATE nodes"
                            " SET current_ip = ?, status = ?, last_updated = ?"
-                           " WHERE server_host = ? AND server_port = ? AND uid = ?;";
+                           " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
 
   sqlite3_stmt *stmt = NULL;
   int           err;
@@ -520,6 +523,7 @@ int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int 
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 4, server_host) : err;
   err = err == SQLITE_OK ? sqlite3_bind_int(stmt, 5, server_port) : err;
   err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 6, uid) : err;
+  err = err == SQLITE_OK ? tumgrd_bind_required_text(stmt, 7, ip_version) : err;
 
   if (err != SQLITE_OK) {
     tumgrd_sqlite_log_error(db->conn, "bind(update_runtime)", err);

@@ -27,7 +27,8 @@ static int tumgrd_mark_runtime(struct tumgrd_db *db, const struct tumgrd_node *n
     return -1;
   }
 
-  return tumgrd_db_update_runtime(db, node->server_host, node->server_port, node->uid, current_ip, status, ts);
+  return tumgrd_db_update_runtime(db, node->server_host, node->server_port, node->uid, node->ip_version, current_ip, status,
+                                  ts);
 }
 
 int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool force) {

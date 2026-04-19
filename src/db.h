@@ -48,7 +48,7 @@ void tumgrd_db_close(struct tumgrd_db *db);
 
 int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node);
 
-int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid, const char *ip_version,
                        struct tumgrd_node *out);
 
 /*
@@ -56,13 +56,14 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
  * 返回 1 表示未找到
  * 返回 -1 表示数据库错误
  */
-int tumgrd_db_delete_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid);
+int tumgrd_db_delete_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                          const char *ip_version);
 
 int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_t *count);
 
 void tumgrd_db_free_nodes(struct tumgrd_node *nodes);
 
 int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
-                             const char *current_ip, const char *status, int64_t last_updated);
+                             const char *ip_version, const char *current_ip, const char *status, int64_t last_updated);
 
 // vim :set sw=2 ts=2 et:
