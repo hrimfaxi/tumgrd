@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
+
 static bool blobmsg_get_bool_default(struct blob_attr *attr, bool defval) {
   if (!attr) {
     return defval;
@@ -433,6 +435,9 @@ static struct ubus_object_type tumgrd_obj_type = UBUS_OBJECT_TYPE("tumgrd", tumg
 static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
                                 struct blob_attr *msg);
 
+static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t);
+static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t);
+
 int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   int err;
 
@@ -472,6 +477,12 @@ int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   }
   ctx->ubus_obj_added = true;
 
+  ctx->startup_reconcile_timer.cb = tumgrd_startup_reconcile_timer_cb;
+  uloop_timeout_set(&ctx->startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
+
+  ctx->periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
+  uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
+
   return 0;
 }
 
@@ -488,6 +499,9 @@ void tumgrd_ubus_cleanup(struct tumgrd_ctx *ctx) {
     ubus_remove_object(ctx->ubus, &ctx->ubus_obj);
     ctx->ubus_obj_added = false;
   }
+
+  uloop_timeout_cancel(&ctx->startup_reconcile_timer);
+  uloop_timeout_cancel(&ctx->periodic_reconcile_timer);
 
   if (ctx->ubus) {
     ubus_free(ctx->ubus);
@@ -544,6 +558,19 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
     log_info("[ubus] WAN interface %s up, force reconcile", ifname);
     tumgrd_reconcile_all(&tctx->db, true);
   }
+}
+
+static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
+  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, startup_reconcile_timer);
+
+  tumgrd_reconcile_all(&ctx->db, true);
+}
+
+static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t) {
+  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, periodic_reconcile_timer);
+
+  tumgrd_reconcile_all(&ctx->db, false);
+  uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
 }
 
 // vim: set sw=2 ts=2 et:

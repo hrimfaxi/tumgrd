@@ -23,9 +23,6 @@
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
 
-static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t);
-static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t);
-
 static void tumgrd_config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->db_path      = TUMGRD_DB_PATH;
@@ -101,19 +98,6 @@ err_cleanup:
   return err;
 }
 
-static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
-  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, startup_reconcile_timer);
-
-  tumgrd_reconcile_all(&ctx->db, true);
-}
-
-static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t) {
-  struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, periodic_reconcile_timer);
-
-  tumgrd_reconcile_all(&ctx->db, false);
-  uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
-}
-
 static void tumgrd_signal_handler(int signo) {
   (void) signo;
   uloop_end();
@@ -171,12 +155,6 @@ int main(int argc, char **argv) {
   db_opened = true;
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
-
-  ctx.startup_reconcile_timer.cb = tumgrd_startup_reconcile_timer_cb;
-  uloop_timeout_set(&ctx.startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
-
-  ctx.periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
-  uloop_timeout_set(&ctx.periodic_reconcile_timer, ctx.cfg.interval_sec * 1000);
 
   log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
            nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
