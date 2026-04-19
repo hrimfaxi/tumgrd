@@ -244,7 +244,7 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
                            ") VALUES ("
                            " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
                            ") "
-                           "ON CONFLICT(server_host, server_port, uid) DO UPDATE SET "
+                           "ON CONFLICT(server_host, server_port, uid, ip_version) DO UPDATE SET "
                            " description=excluded.description,"
                            " client_comment=excluded.client_comment,"
                            " created_at=excluded.created_at,"
@@ -252,7 +252,6 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
                            " client_port=excluded.client_port,"
                            " memlimit=excluded.memlimit,"
                            " ip_check_url=excluded.ip_check_url,"
-                           " ip_version=excluded.ip_version,"
                            " current_ip=excluded.current_ip,"
                            " last_updated=excluded.last_updated,"
                            " status=excluded.status;";
