@@ -2,6 +2,11 @@
 
 #include <stdbool.h>
 
+#define TUMGRD_FREE(p) do { \
+  free(p); \
+  p = NULL; \
+  } while(0);
+
 int  parse_interval(const char *s, int *out);
 bool streqcase(const char *a, const char *b);
 bool streq(const char *a, const char *b);

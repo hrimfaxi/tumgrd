@@ -1,6 +1,7 @@
 #include "runner.h"
 #include "helper.h"
 #include "log.h"
+#include "try.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -284,41 +285,53 @@ static int tumgrd_run_ktuctl(char *const argv[]) {
 }
 
 int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current_ip) {
-  char comment[256];
-  char script[1024];
-
   if (!node || !current_ip || current_ip[0] == '\0') {
     return -1;
   }
 
-  tumgrd_sanitize_comment(node->client_comment, comment, sizeof(comment));
+  int   err = -1;
+  char *script = NULL;
+  char  comment[256] = {0};
+  char  comment_suffix[280] = {0};
 
+  tumgrd_sanitize_comment(node->client_comment, comment, sizeof(comment));
   if (comment[0] != '\0') {
-    snprintf(script, sizeof(script), "server-add uid %s port %d address %s comment %s\n", node->uid, node->client_port,
-             current_ip, comment);
-  } else {
-    snprintf(script, sizeof(script), "server-add uid %s port %d address %s\n", node->uid, node->client_port, current_ip);
+    snprintf(comment_suffix, sizeof(comment_suffix), " comment %s", comment);
   }
 
+  try2(asprintf(&script, "server-add uid %s port %d address %s%s\n",
+                node->uid, node->client_port, current_ip, comment_suffix),
+       "asprintf");
+
   log_trimmed("[runner] server add stdin", script);
-  return tumgrd_run_tuctl_script(node, script, "server updated:");
+  try2(tumgrd_run_tuctl_script(node, script, "server updated:"));
+  err = 0;
+
+err_cleanup:
+  TUMGRD_FREE(script);
+  return err;
 }
 
 int tumgrd_runner_server_del(const struct tumgrd_node *node) {
-  char script[512];
-
   if (!node) {
     return -1;
   }
 
-  snprintf(script, sizeof(script), "server-del uid %s\n", node->uid);
-  log_trimmed("[runner] server del stdin", script);
+  int err = -1;
+  char *script = NULL;
 
-  return tumgrd_run_tuctl_script(node, script, "server deleted:");
+  try2(asprintf(&script, "server-del uid %s\n", node->uid), "aprintf");
+  log_trimmed("[runner] server del stdin", script);
+  try2(tumgrd_run_tuctl_script(node, script, "server deleted:"));
+  err = 0;
+
+err_cleanup:
+  TUMGRD_FREE(script);
+  return err;
 }
 
 int tumgrd_runner_client_add(const struct tumgrd_node *node) {
-  char        client_port[16];
+  char        client_port[16] = {};
   char       *argv[16];
   int         argc = 0;
   const char *ip_flag;
