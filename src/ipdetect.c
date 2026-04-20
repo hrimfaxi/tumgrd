@@ -14,41 +14,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static void tumgrd_trim(char *s) {
-  char *start;
-  char *end;
-
-  if (!s || s[0] == '\0') {
-    return;
-  }
-
-  start = s;
-  while (*start && isspace((unsigned char) *start)) {
-    start++;
-  }
-
-  if (start != s) {
-    memmove(s, start, strlen(start) + 1);
-  }
-
-  end = s + strlen(s);
-  while (end > s && isspace((unsigned char) end[-1])) {
-    end--;
-  }
-  *end = '\0';
-}
-
-static int tumgrd_is_ipv4(const char *s) {
+static int is_ipv4(const char *s) {
   struct in_addr addr4;
   return s && inet_pton(AF_INET, s, &addr4) == 1;
 }
 
-static int tumgrd_is_ipv6(const char *s) {
+static int is_ipv6(const char *s) {
   struct in6_addr addr6;
   return s && inet_pton(AF_INET6, s, &addr6) == 1;
 }
 
-static int tumgrd_ip_family_from_version(const char *ip_version) {
+static int ip_family_from_version(const char *ip_version) {
   if (!ip_version || ip_version[0] == '\0') {
     return 0;
   }
@@ -64,7 +40,7 @@ static int tumgrd_ip_family_from_version(const char *ip_version) {
   return 0;
 }
 
-static int tumgrd_extract_ip(const char *text, const char *ip_version, char *out, size_t out_len) {
+static int extract_ip(const char *text, const char *ip_version, char *out, size_t out_len) {
   char  buf[512];
   char *p;
   int   family;
@@ -73,20 +49,20 @@ static int tumgrd_extract_ip(const char *text, const char *ip_version, char *out
     return -1;
   }
 
-  snprintf(buf, sizeof(buf), "%s", text);
-  tumgrd_trim(buf);
+  copy_string(buf, sizeof(buf), text);
+  trim_inplace(buf);
 
-  family = tumgrd_ip_family_from_version(ip_version);
+  family = ip_family_from_version(ip_version);
 
   /*
    * 最常见情况：响应体本身就是一个 IP
    */
-  if ((family == 0 || family == 4) && tumgrd_is_ipv4(buf)) {
+  if ((family == 0 || family == 4) && is_ipv4(buf)) {
     snprintf(out, out_len, "%s", buf);
     return 0;
   }
 
-  if ((family == 0 || family == 6) && tumgrd_is_ipv6(buf)) {
+  if ((family == 0 || family == 6) && is_ipv6(buf)) {
     snprintf(out, out_len, "%s", buf);
     return 0;
   }
@@ -120,13 +96,13 @@ static int tumgrd_extract_ip(const char *text, const char *ip_version, char *out
       continue;
     }
 
-    if ((family == 0 || family == 4) && tumgrd_is_ipv4(token)) {
-      snprintf(out, out_len, "%s", token);
+    if ((family == 0 || family == 4) && is_ipv4(token)) {
+      copy_string(out, out_len, token);
       return 0;
     }
 
-    if ((family == 0 || family == 6) && tumgrd_is_ipv6(token)) {
-      snprintf(out, out_len, "%s", token);
+    if ((family == 0 || family == 6) && is_ipv6(token)) {
+      copy_string(out, out_len, token);
       return 0;
     }
   }
@@ -134,7 +110,7 @@ static int tumgrd_extract_ip(const char *text, const char *ip_version, char *out
   return -1;
 }
 
-static void tumgrd_build_url(const char *url, char *buf, size_t buf_len) {
+static void build_url(const char *url, char *buf, size_t buf_len) {
   if (!buf || buf_len == 0) {
     return;
   }
@@ -144,13 +120,13 @@ static void tumgrd_build_url(const char *url, char *buf, size_t buf_len) {
   }
 
   if (strstr(url, "://")) {
-    snprintf(buf, buf_len, "%s", url);
+    copy_string(buf, buf_len, "url");
   } else {
     snprintf(buf, buf_len, "http://%s", url);
   }
 }
 
-static int tumgrd_exec_capture(char *const argv[], char *out, size_t out_len) {
+static int exec_capture(char *const argv[], char *out, size_t out_len) {
   int     pipefd[2];
   pid_t   pid;
   ssize_t nread;
@@ -213,7 +189,7 @@ static int tumgrd_exec_capture(char *const argv[], char *out, size_t out_len) {
  * 原理：connect() 后 getsockname() 返回的是内核选路后的源地址
  * 这个地址是能出网的全球单播地址，而非 fe80::/10 等链路本地地址
  */
-static int tumgrd_detect_ipv6_wan_by_connect(const char *host, int port, char *out, size_t out_len) {
+static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, size_t out_len) {
   struct addrinfo         hints, *res, *rp;
   int                     sockfd = -1;
   int                     rc;
@@ -304,7 +280,7 @@ static int tumgrd_detect_ipv6_wan_by_connect(const char *host, int port, char *o
   return 0;
 }
 
-int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, size_t out_len) {
+int detect_public_ip(const char *url, const char *ip_version, char *out, size_t out_len) {
   char final_url[256];
   char buf[512];
   int  rc;
@@ -314,15 +290,15 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
   }
 
   out[0] = '\0';
-  tumgrd_build_url(url, final_url, sizeof(final_url));
+  build_url(url, final_url, sizeof(final_url));
 
   /*
    * 如果是 IPv6 请求且没有指定外部检测 URL，
    * 优先使用本地连接探测方法（无需外部 HTTP 服务）
    */
-  int family = tumgrd_ip_family_from_version(ip_version);
+  int family = ip_family_from_version(ip_version);
   if (family == 6 && (!url || url[0] == '\0' || streq(url, TUMGRD_DEFAULT_IP_CHECK_URL))) {
-    rc = tumgrd_detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
+    rc = detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
     if (rc == 0) {
       return 0;
     }
@@ -336,8 +312,8 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
     char *argv[] = {"uclient-fetch", "-qO-", final_url, NULL};
 
     buf[0] = '\0';
-    rc     = tumgrd_exec_capture(argv, buf, sizeof(buf));
-    if (rc == 0 && tumgrd_extract_ip(buf, ip_version, out, out_len) == 0) {
+    rc     = exec_capture(argv, buf, sizeof(buf));
+    if (rc == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
       return 0;
     }
   }
@@ -349,8 +325,8 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
     char *argv[] = {"wget", "-qO-", final_url, NULL};
 
     buf[0] = '\0';
-    rc     = tumgrd_exec_capture(argv, buf, sizeof(buf));
-    if (rc == 0 && tumgrd_extract_ip(buf, ip_version, out, out_len) == 0) {
+    rc     = exec_capture(argv, buf, sizeof(buf));
+    if (rc == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
       return 0;
     }
   }
@@ -359,3 +335,5 @@ int tumgrd_detect_public_ip(const char *url, const char *ip_version, char *out, 
 
   return -1;
 }
+
+// vim: set sw=2 ts=2 et:

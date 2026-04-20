@@ -185,8 +185,8 @@ int ensure_parent_dir(const char *path) {
 }
 
 int check_wan_interface(const char *ifname, bool *is_wan) {
-  struct uci_context *ctx = NULL;
-  struct uci_ptr      ptr = {};
+  struct uci_context *ctx     = NULL;
+  struct uci_ptr      ptr     = {};
   char                query[] = "network.wan.device";
   int                 err     = 0;
 
@@ -194,7 +194,7 @@ int check_wan_interface(const char *ifname, bool *is_wan) {
     return -EINVAL;
 
   *is_wan = false;
-  ctx = try2_p(uci_alloc_context());
+  ctx     = try2_p(uci_alloc_context());
   try2(uci_lookup_ptr(ctx, &ptr, query, true) == UCI_OK ? 0 : -ENOENT);
 
   if (ptr.o && is_wan) {

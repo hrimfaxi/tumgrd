@@ -544,7 +544,7 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
 
   /* 只处理 ifup 事件，且接口匹配 */
   if (streq(action, "ifup")) {
-    int err;
+    int  err;
     bool is_wan = false;
 
     err = check_wan_interface(ifname, &is_wan);

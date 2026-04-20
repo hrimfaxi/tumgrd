@@ -54,7 +54,7 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
     return -1;
   }
 
-  ret = tumgrd_detect_public_ip(tumgrd_pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip));
+  ret = detect_public_ip(tumgrd_pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip));
   if (ret != 0) {
     log_error("[reconcile] detect ip failed uid=%s", node->uid);
     tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
