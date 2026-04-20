@@ -25,6 +25,14 @@ find_library(UBUS_LIBRARY
   NAMES ubus
 )
 
+find_path(UCI_INCLUDE_DIR
+  NAMES uci.h
+)
+
+find_library(UCI_LIBRARY
+  NAMES uci
+)
+
 if (NOT UBOX_INCLUDE_DIR)
   message(FATAL_ERROR "libubox headers not found")
 endif()
@@ -41,10 +49,20 @@ if (NOT UBUS_LIBRARY)
   message(FATAL_ERROR "libubus library not found")
 endif()
 
+if (NOT UCI_INCLUDE_DIR)
+  message(FATAL_ERROR "libuci headers not found")
+endif()
+
+if (NOT UCI_LIBRARY)
+  message(FATAL_ERROR "libuci library not found")
+endif()
+
 message(STATUS "UBOX_INCLUDE_DIR = ${UBOX_INCLUDE_DIR}")
 message(STATUS "UBOX_LIBRARY     = ${UBOX_LIBRARY}")
 message(STATUS "UBUS_INCLUDE_DIR = ${UBUS_INCLUDE_DIR}")
 message(STATUS "UBUS_LIBRARY     = ${UBUS_LIBRARY}")
+message(STATUS "UCI_INCLUDE_DIR  = ${UCI_INCLUDE_DIR}")
+message(STATUS "UCI_LIBRARY      = ${UCI_LIBRARY}")
 message(STATUS "SQLite3_INCLUDE_DIRS = ${SQLite3_INCLUDE_DIRS}")
 message(STATUS "SQLite3_LIBRARIES    = ${SQLite3_LIBRARIES}")
 
@@ -62,12 +80,14 @@ add_executable(tumgrd
 target_include_directories(tumgrd PRIVATE
   ${UBOX_INCLUDE_DIR}
   ${UBUS_INCLUDE_DIR}
+  ${UCI_INCLUDE_DIR}
   ${SQLite3_INCLUDE_DIRS}
 )
 
 target_link_libraries(tumgrd PRIVATE
   ${UBOX_LIBRARY}
   ${UBUS_LIBRARY}
+  ${UCI_LIBRARY}
   SQLite::SQLite3
 )
 

@@ -512,20 +512,6 @@ void tumgrd_ubus_cleanup(struct tumgrd_ctx *ctx) {
   }
 }
 
-static const char *const wan_interfaces[] = {"pppoe-wan", "wan", "wan6", NULL};
-
-/* 添加事件处理函数实现（在任意 static 函数区域） */
-static bool is_wan_interface(const char *ifname) {
-  if (!ifname)
-    return false;
-
-  for (int i = 0; wan_interfaces[i]; i++) {
-    if (streq(ifname, wan_interfaces[i]))
-      return true;
-  }
-  return false;
-}
-
 static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
                                 struct blob_attr *msg) {
   (void) ctx;
@@ -557,9 +543,20 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
   log_debug("[ubus] network.interface %s %s", ifname, action);
 
   /* 只处理 ifup 事件，且接口匹配 */
-  if (streq(action, "ifup") && is_wan_interface(ifname)) {
-    log_info("[ubus] WAN interface %s up, force reconcile", ifname);
-    tumgrd_reconcile_all(&tctx->db, true);
+  if (streq(action, "ifup")) {
+    int err;
+    bool is_wan = false;
+
+    err = check_wan_interface(ifname, &is_wan);
+    if (err) {
+      log_error("[uci] check wan interface failed: %d", err);
+      return;
+    }
+
+    if (is_wan) {
+      log_info("[ubus] WAN interface %s up, force reconcile", ifname);
+      tumgrd_reconcile_all(&tctx->db, true);
+    }
   }
 }
 

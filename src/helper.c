@@ -2,6 +2,8 @@
 #include "log.h"
 #include "try.h"
 
+#include <uci.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -180,6 +182,44 @@ int ensure_parent_dir(const char *path) {
   *slash = '\0';
 
   return _mkdir_p(dir, 0755);
+}
+
+int check_wan_interface(const char *ifname, bool *is_wan) {
+  struct uci_context *ctx = NULL;
+  struct uci_ptr      ptr = {};
+  char                query[] = "network.wan.device";
+  int                 err     = 0;
+
+  if (!is_wan)
+    return -EINVAL;
+
+  *is_wan = false;
+  ctx = try2_p(uci_alloc_context());
+  try2(uci_lookup_ptr(ctx, &ptr, query, true) == UCI_OK ? 0 : -ENOENT);
+
+  if (ptr.o && is_wan) {
+    if (ptr.o->type == UCI_TYPE_STRING) {
+      if (ifname && streq(ptr.o->v.string, ifname)) {
+        *is_wan = true;
+      }
+    } else if (ptr.o->type == UCI_TYPE_LIST) {
+      struct uci_element *e;
+      uci_foreach_element(&ptr.o->v.list, e) {
+        if (ifname && streq(e->name, ifname)) {
+          *is_wan = true;
+          break;
+        }
+      }
+    }
+  }
+
+err_cleanup:
+  if (ctx) {
+    uci_free_context(ctx);
+    ctx = NULL;
+  }
+
+  return err;
 }
 
 // vim: set sw=2 ts=2 et:
