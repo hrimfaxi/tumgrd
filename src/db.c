@@ -73,7 +73,7 @@ static void column_text(sqlite3_stmt *stmt, int col, char *dst, size_t dst_len) 
   copy_string(dst, dst_len, (const char *) text);
 }
 
-static int tumgrd_row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
+static int row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
   if (!stmt || !node) {
     return -1;
   }
@@ -290,7 +290,7 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
     goto err_cleanup;
   }
 
-  tumgrd_row_to_node(stmt, out);
+  row_to_node(stmt, out);
   err = 0;
 err_cleanup:
   if (stmt)
@@ -369,7 +369,7 @@ int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_
         cap = new_cap;
       }
 
-      try2(tumgrd_row_to_node(stmt, &arr[n]), "[db] row_to_node failed in list_nodes");
+      try2(row_to_node(stmt, &arr[n]), "[db] row_to_node failed in list_nodes");
       n++;
       continue;
     }

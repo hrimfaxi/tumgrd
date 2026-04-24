@@ -23,7 +23,7 @@
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
 
-static void tumgrd_config_init(struct tumgrd_config *cfg) {
+static void config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->db_path      = TUMGRD_DB_PATH;
   cfg->socket_path  = DEFAULT_SOCKET_PATH;
@@ -98,7 +98,7 @@ err_cleanup:
   return err;
 }
 
-static void tumgrd_signal_handler(int signo) {
+static void signal_handler(int signo) {
   (void) signo;
   uloop_end();
 }
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
   bool              db_opened = false;
   struct tumgrd_ctx ctx       = {};
 
-  tumgrd_config_init(&ctx.cfg);
+  config_init(&ctx.cfg);
   err = parse_args(argc, argv, &ctx.cfg);
   if (err > 0) {
     return 0;
@@ -148,8 +148,8 @@ int main(int argc, char **argv) {
 
   try2(uloop_init(), "[main] uloop_init failed");
 
-  signal(SIGINT, tumgrd_signal_handler);
-  signal(SIGTERM, tumgrd_signal_handler);
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
 
   try2(tumgrd_db_open(&ctx.db, ctx.cfg.db_path), "[main] open db failed: %s", ctx.cfg.db_path);
   db_opened = true;

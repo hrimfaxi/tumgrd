@@ -10,19 +10,19 @@
 #include <string.h>
 #include <time.h>
 
-static int64_t tumgrd_now_unix(void) {
+static int64_t now_unix(void) {
   return (int64_t) time(NULL);
 }
 
-static const char *tumgrd_pick_ip_check_url(const struct tumgrd_node *node) {
+static const char *pick_ip_check_url(const struct tumgrd_node *node) {
   if (node && node->ip_check_url[0] != '\0') {
     return node->ip_check_url;
   }
   return TUMGRD_DEFAULT_IP_CHECK_URL;
 }
 
-static int tumgrd_mark_runtime(struct tumgrd_db *db, const struct tumgrd_node *node, const char *current_ip, const char *status,
-                               int64_t ts) {
+static int mark_runtime(struct tumgrd_db *db, const struct tumgrd_node *node, const char *current_ip, const char *status,
+                        int64_t ts) {
   if (!db || !node || !status) {
     return -1;
   }
@@ -43,21 +43,21 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
     return -1;
   }
 
-  now = tumgrd_now_unix();
+  now = now_unix();
 
   log_info("[reconcile] start uid=%s server=%s:%d client_port=%d force=%d old_ip=%s", node->uid, node->server_host,
            node->server_port, node->client_port, force ? 1 : 0, node->current_ip);
 
-  ret = tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_SYNCING, now);
+  ret = mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_SYNCING, now);
   if (ret != 0) {
     log_error("[reconcile] failed to mark syncing uid=%s", node->uid);
     return -1;
   }
 
-  ret = detect_public_ip(tumgrd_pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip));
+  ret = detect_public_ip(pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip));
   if (ret != 0) {
     log_error("[reconcile] detect ip failed uid=%s", node->uid);
-    tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
+    mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, now_unix());
     return -1;
   }
 
@@ -72,21 +72,21 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
     ret = tumgrd_runner_server_add(node, detected_ip);
     if (ret != 0) {
       log_error("[reconcile] server-add failed uid=%s ip=%s", node->uid, detected_ip);
-      tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
+      mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, now_unix());
       return -1;
     }
 
     ret = tumgrd_runner_reset_local_client(node);
     if (ret != 0) {
       log_error("[reconcile] reset local client failed uid=%s", node->uid);
-      tumgrd_mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, tumgrd_now_unix());
+      mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, now_unix());
       return -1;
     }
   } else {
     log_info("[reconcile] skip apply uid=%s ip unchanged and force=0", node->uid);
   }
 
-  ret = tumgrd_mark_runtime(db, node, detected_ip, TUMGRD_STATUS_ACTIVE, tumgrd_now_unix());
+  ret = mark_runtime(db, node, detected_ip, TUMGRD_STATUS_ACTIVE, now_unix());
   if (ret != 0) {
     log_error("[reconcile] update runtime failed uid=%s ip=%s", node->uid, detected_ip);
     return -1;

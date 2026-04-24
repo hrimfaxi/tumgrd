@@ -23,8 +23,7 @@ static bool blobmsg_get_bool_default(struct blob_attr *attr, bool defval) {
   return blobmsg_get_u8(attr) ? true : false;
 }
 
-static void tumgrd_reply_simple(struct ubus_context *ctx, struct ubus_request_data *req, const char *status,
-                                const char *message) {
+static void reply_simple(struct ubus_context *ctx, struct ubus_request_data *req, const char *status, const char *message) {
   struct blob_buf b = {0};
 
   blob_buf_init(&b, 0);
@@ -40,7 +39,7 @@ static void tumgrd_reply_simple(struct ubus_context *ctx, struct ubus_request_da
   blob_buf_free(&b);
 }
 
-static void tumgrd_add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
+static void add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
   if (!b || !n) {
     return;
   }
@@ -90,8 +89,8 @@ static void tumgrd_add_node_brief(struct blob_buf *b, const struct tumgrd_node *
  *   1  未找到
  *  -1  数据库错误 / 参数错误
  */
-static int tumgrd_resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, int server_port,
-                               const char *ip_version, struct tumgrd_node *out) {
+static int resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, int server_port, const char *ip_version,
+                        struct tumgrd_node *out) {
   int rc;
 
   if (!db || !uid || !server_host || !ip_version || !out) {
@@ -216,7 +215,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "stored_but_apply_failed");
   blobmsg_add_string(&b, "action", action);
   blobmsg_add_u8(&b, "applied", rc == 0 ? 1 : 0);
-  tumgrd_add_node_brief(&b, &node);
+  add_node_brief(&b, &node);
   ubus_send_reply(ctx, req, b.head);
   blob_buf_free(&b);
 
@@ -256,12 +255,11 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
-                                   (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), blobmsg_get_string(tb[DEREG_IP_VERSION]),
-                                   &node);
+  resolve_rc = resolve_node(&tctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
+                            (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), blobmsg_get_string(tb[DEREG_IP_VERSION]), &node);
 
   if (resolve_rc == 1) {
-    tumgrd_reply_simple(ctx, req, "not_found", "node not found");
+    reply_simple(ctx, req, "not_found", "node not found");
     return UBUS_STATUS_OK;
   }
 
@@ -287,7 +285,7 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
   blobmsg_add_u8(&b, "server_deleted", rc_server == 0 ? 1 : 0);
   blobmsg_add_u8(&b, "client_deleted", rc_client == 0 ? 1 : 0);
   blobmsg_add_u8(&b, "db_deleted", rc_db == 0 ? 1 : 0);
-  tumgrd_add_node_brief(&b, &node);
+  add_node_brief(&b, &node);
 
   ubus_send_reply(ctx, req, b.head);
   blob_buf_free(&b);
@@ -350,8 +348,8 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     struct tumgrd_node node;
     int                resolve_rc;
 
-    resolve_rc = tumgrd_resolve_node(&tctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
-                                     (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), blobmsg_get_string(tb[REF_IP_VERSION]), &node);
+    resolve_rc = resolve_node(&tctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
+                              (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), blobmsg_get_string(tb[REF_IP_VERSION]), &node);
 
     if (resolve_rc == 1) {
       blobmsg_add_string(&b, "status", "not_found");
@@ -371,7 +369,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     blobmsg_add_string(&b, "scope", "one");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
     blobmsg_add_string(&b, "note", "force accepted for compatibility; current reconcile path is always full apply");
-    tumgrd_add_node_brief(&b, &node);
+    add_node_brief(&b, &node);
 
     ubus_send_reply(ctx, req, b.head);
     blob_buf_free(&b);
@@ -409,7 +407,7 @@ static int handle_status(struct ubus_context *ctx, struct ubus_object *obj, stru
   array = blobmsg_open_array(&b, "nodes");
   for (i = 0; i < count; i++) {
     void *table = blobmsg_open_table(&b, NULL);
-    tumgrd_add_node_brief(&b, &nodes[i]);
+    add_node_brief(&b, &nodes[i]);
     blobmsg_close_table(&b, table);
   }
   blobmsg_close_array(&b, array);
@@ -435,11 +433,10 @@ static const struct ubus_method tumgrd_methods[] = {
 
 static struct ubus_object_type tumgrd_obj_type = UBUS_OBJECT_TYPE("tumgrd", tumgrd_methods);
 
-static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
-                                struct blob_attr *msg);
+static void net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type, struct blob_attr *msg);
 
-static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t);
-static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t);
+static void startup_reconcile_timer_cb(struct uloop_timeout *t);
+static void periodic_reconcile_timer_cb(struct uloop_timeout *t);
 
 int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   int err;
@@ -460,7 +457,7 @@ int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   memset(&ctx->ubus_obj, 0, sizeof(ctx->ubus_obj));
   memset(&ctx->net_event_handler, 0, sizeof(ctx->net_event_handler));
 
-  ctx->net_event_handler.cb = tumgrd_net_event_cb;
+  ctx->net_event_handler.cb = net_event_cb;
   err                       = ubus_register_event_handler(ctx->ubus, &ctx->net_event_handler, "network.interface");
   if (err != 0) {
     tumgrd_ubus_cleanup(ctx);
@@ -480,10 +477,10 @@ int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   }
   ctx->ubus_obj_added = true;
 
-  ctx->startup_reconcile_timer.cb = tumgrd_startup_reconcile_timer_cb;
+  ctx->startup_reconcile_timer.cb = startup_reconcile_timer_cb;
   uloop_timeout_set(&ctx->startup_reconcile_timer, TUMGRD_STARTUP_RECONCILE_DELAY_MS);
 
-  ctx->periodic_reconcile_timer.cb = tumgrd_periodic_reconcile_timer_cb;
+  ctx->periodic_reconcile_timer.cb = periodic_reconcile_timer_cb;
   uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
 
   return 0;
@@ -512,8 +509,7 @@ void tumgrd_ubus_cleanup(struct tumgrd_ctx *ctx) {
   }
 }
 
-static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type,
-                                struct blob_attr *msg) {
+static void net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev, const char *type, struct blob_attr *msg) {
   (void) ctx;
   (void) type;
 
@@ -560,13 +556,13 @@ static void tumgrd_net_event_cb(struct ubus_context *ctx, struct ubus_event_hand
   }
 }
 
-static void tumgrd_startup_reconcile_timer_cb(struct uloop_timeout *t) {
+static void startup_reconcile_timer_cb(struct uloop_timeout *t) {
   struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, startup_reconcile_timer);
 
   tumgrd_reconcile_all(&ctx->db, true);
 }
 
-static void tumgrd_periodic_reconcile_timer_cb(struct uloop_timeout *t) {
+static void periodic_reconcile_timer_cb(struct uloop_timeout *t) {
   struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, periodic_reconcile_timer);
 
   tumgrd_reconcile_all(&ctx->db, false);

@@ -14,7 +14,7 @@
 #define TUMGRD_TUCTL_CLIENT_BIN "tuctl_client"
 #define TUMGRD_KTUCTL_BIN       "ktuctl"
 
-static void tumgrd_sanitize_comment(const char *src, char *dst, size_t dst_len) {
+static void sanitize_comment(const char *src, char *dst, size_t dst_len) {
   size_t i;
   size_t j = 0;
 
@@ -39,7 +39,7 @@ static void tumgrd_sanitize_comment(const char *src, char *dst, size_t dst_len) 
   trim_inplace(dst);
 }
 
-static const char *tumgrd_ip_version_flag(const char *ip_version) {
+static const char *ip_version_flag(const char *ip_version) {
   if (!ip_version || ip_version[0] == '\0') {
     return NULL;
   }
@@ -55,7 +55,7 @@ static const char *tumgrd_ip_version_flag(const char *ip_version) {
   return NULL;
 }
 
-static int tumgrd_read_all_fd(int fd, char *buf, size_t buf_len) {
+static int read_all_fd(int fd, char *buf, size_t buf_len) {
   ssize_t nread;
   size_t  used = 0;
 
@@ -81,7 +81,7 @@ static int tumgrd_read_all_fd(int fd, char *buf, size_t buf_len) {
   return 0;
 }
 
-static void tumgrd_log_argv(const char *tag, char *const argv[]) {
+static void log_argv(const char *tag, char *const argv[]) {
   int i;
 
   fprintf(stderr, "[runner] %s exec:", tag ? tag : "cmd");
@@ -91,8 +91,8 @@ static void tumgrd_log_argv(const char *tag, char *const argv[]) {
   fprintf(stderr, "\n");
 }
 
-static int tumgrd_exec_with_stdio(char *const argv[], const char *stdin_data, int has_memlimit, int memlimit, char *stdout_buf,
-                                  size_t stdout_buf_len, char *stderr_buf, size_t stderr_buf_len) {
+static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_memlimit, int memlimit, char *stdout_buf,
+                           size_t stdout_buf_len, char *stderr_buf, size_t stderr_buf_len) {
   int   stdin_pipe[2]  = {-1, -1};
   int   stdout_pipe[2] = {-1, -1};
   int   stderr_pipe[2] = {-1, -1};
@@ -190,12 +190,12 @@ static int tumgrd_exec_with_stdio(char *const argv[], const char *stdin_data, in
   close(stdin_pipe[1]);
 
   if (stdout_buf && stdout_buf_len > 0) {
-    tumgrd_read_all_fd(stdout_pipe[0], stdout_buf, stdout_buf_len);
+    read_all_fd(stdout_pipe[0], stdout_buf, stdout_buf_len);
   }
   close(stdout_pipe[0]);
 
   if (stderr_buf && stderr_buf_len > 0) {
-    tumgrd_read_all_fd(stderr_pipe[0], stderr_buf, stderr_buf_len);
+    read_all_fd(stderr_pipe[0], stderr_buf, stderr_buf_len);
   }
   close(stderr_pipe[0]);
 
@@ -210,7 +210,7 @@ static int tumgrd_exec_with_stdio(char *const argv[], const char *stdin_data, in
   return 0;
 }
 
-static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *script, const char *success_marker) {
+static int run_tuctl_script(const struct tumgrd_node *node, const char *script, const char *success_marker) {
   char        server_port[16];
   char       *argv[16];
   int         argc = 0;
@@ -223,7 +223,7 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
     return -1;
   }
 
-  ip_flag = tumgrd_ip_version_flag(node->ip_version);
+  ip_flag = ip_version_flag(node->ip_version);
   snprintf(server_port, sizeof(server_port), "%d", node->server_port);
 
   argv[argc++] = TUMGRD_TUCTL_CLIENT_BIN;
@@ -244,10 +244,10 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   argv[argc++] = "-";
   argv[argc]   = NULL;
 
-  tumgrd_log_argv("tuctl_client", argv);
+  log_argv("tuctl_client", argv);
 
-  rc = tumgrd_exec_with_stdio(argv, script, node->has_memlimit, node->memlimit, stdout_buf, sizeof(stdout_buf), stderr_buf,
-                              sizeof(stderr_buf));
+  rc = exec_with_stdio(argv, script, node->has_memlimit, node->memlimit, stdout_buf, sizeof(stdout_buf), stderr_buf,
+                       sizeof(stderr_buf));
 
   trim_inplace(stdout_buf);
   trim_inplace(stderr_buf);
@@ -268,14 +268,14 @@ static int tumgrd_run_tuctl_script(const struct tumgrd_node *node, const char *s
   return 0;
 }
 
-static int tumgrd_run_ktuctl(char *const argv[]) {
+static int run_ktuctl(char *const argv[]) {
   char stdout_buf[1024];
   char stderr_buf[1024];
   int  rc;
 
-  tumgrd_log_argv("ktuctl", argv);
+  log_argv("ktuctl", argv);
 
-  rc = tumgrd_exec_with_stdio(argv, NULL, 0, 0, stdout_buf, sizeof(stdout_buf), stderr_buf, sizeof(stderr_buf));
+  rc = exec_with_stdio(argv, NULL, 0, 0, stdout_buf, sizeof(stdout_buf), stderr_buf, sizeof(stderr_buf));
 
   trim_inplace(stdout_buf);
   trim_inplace(stderr_buf);
@@ -294,7 +294,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
   char  comment[256]        = {0};
   char  comment_suffix[280] = {0};
 
-  tumgrd_sanitize_comment(node->client_comment, comment, sizeof(comment));
+  sanitize_comment(node->client_comment, comment, sizeof(comment));
   if (comment[0] != '\0') {
     snprintf(comment_suffix, sizeof(comment_suffix), " comment %s", comment);
   }
@@ -303,7 +303,7 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
        "asprintf");
 
   log_trimmed("[runner] server add stdin", script);
-  try2(tumgrd_run_tuctl_script(node, script, "server updated:"));
+  try2(run_tuctl_script(node, script, "server updated:"));
   err = 0;
 
 err_cleanup:
@@ -321,7 +321,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
 
   try2(asprintf(&script, "server-del uid %s\n", node->uid), "aprintf");
   log_trimmed("[runner] server del stdin", script);
-  try2(tumgrd_run_tuctl_script(node, script, "server deleted:"));
+  try2(run_tuctl_script(node, script, "server deleted:"));
   err = 0;
 
 err_cleanup:
@@ -339,7 +339,7 @@ int tumgrd_runner_client_add(const struct tumgrd_node *node) {
     return -1;
   }
 
-  ip_flag = tumgrd_ip_version_flag(node->ip_version);
+  ip_flag = ip_version_flag(node->ip_version);
   snprintf(client_port, sizeof(client_port), "%d", node->client_port);
 
   argv[argc++] = TUMGRD_KTUCTL_BIN;
@@ -361,7 +361,7 @@ int tumgrd_runner_client_add(const struct tumgrd_node *node) {
 
   argv[argc] = NULL;
 
-  return tumgrd_run_ktuctl(argv);
+  return run_ktuctl(argv);
 }
 
 int tumgrd_runner_client_del(const struct tumgrd_node *node) {
@@ -373,7 +373,7 @@ int tumgrd_runner_client_del(const struct tumgrd_node *node) {
     return -1;
   }
 
-  ip_flag = tumgrd_ip_version_flag(node->ip_version);
+  ip_flag = ip_version_flag(node->ip_version);
 
   argv[argc++] = TUMGRD_KTUCTL_BIN;
   if (ip_flag) {
@@ -386,7 +386,7 @@ int tumgrd_runner_client_del(const struct tumgrd_node *node) {
   argv[argc++] = (char *) node->uid;
   argv[argc]   = NULL;
 
-  return tumgrd_run_ktuctl(argv);
+  return run_ktuctl(argv);
 }
 
 int tumgrd_runner_reset_local_client(const struct tumgrd_node *node) {
