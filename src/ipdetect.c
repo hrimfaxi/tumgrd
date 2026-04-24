@@ -1,6 +1,7 @@
 #include "ipdetect.h"
 #include "helper.h"
 #include "log.h"
+#include "try.h"
 #include "tumgrd.h"
 
 #include <arpa/inet.h>
@@ -192,12 +193,13 @@ static int exec_capture(char *const argv[], char *out, size_t out_len) {
 static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, size_t out_len) {
   struct addrinfo         hints, *res, *rp;
   int                     sockfd = -1;
-  int                     rc;
+  int                     err;
   struct sockaddr_storage local_addr;
   socklen_t               addr_len = sizeof(local_addr);
   void                   *addr_ptr = NULL;
   const char             *addr_str = NULL;
   char                    port_str[6];
+  int                     gai_ret;
 
   if (!out || out_len == 0) {
     return -1;
@@ -218,10 +220,11 @@ static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, siz
   hints.ai_family   = AF_INET6;    /* 强制 IPv6 */
   hints.ai_socktype = SOCK_STREAM; /* TCP */
 
-  rc = getaddrinfo(host, port_str, &hints, &res);
-  if (rc != 0) {
-    log_error("[ipdetect] getaddrinfo failed for %s:%d: %s", host, port, gai_strerror(rc));
-    return -1;
+  gai_ret = getaddrinfo(host, port_str, &hints, &res);
+  if (gai_ret != 0) {
+    log_error("[ipdetect] getaddrinfo failed for %s:%d: %s", host, port, gai_strerror(gai_ret));
+    err = -1;
+    goto err_cleanup;
   }
 
   /* 尝试连接第一个可用的地址 */
@@ -240,50 +243,54 @@ static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, siz
     sockfd = -1;
   }
 
-  freeaddrinfo(res);
-
   if (sockfd < 0) {
+    err = -1;
     log_error("[ipdetect] failed to connect to %s:%d", host, port);
-    return -1;
+    goto err_cleanup;
   }
 
-  /* 获取本地地址（即 WAN IPv6 地址） */
-  if (getsockname(sockfd, (struct sockaddr *) &local_addr, &addr_len) != 0) {
-    log_error("[ipdetect] getsockname failed: %s", strerror(errno));
-    close(sockfd);
-    return -1;
-  }
+  try2(getsockname(sockfd, (struct sockaddr *) &local_addr, &addr_len), "[ipdetect] getsockname failed");
 
-  close(sockfd);
-
-  /* 转换为字符串 */
-  if (local_addr.ss_family == AF_INET6) {
-    struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &local_addr;
-    addr_ptr                  = &sin6->sin6_addr;
-    addr_str                  = inet_ntop(AF_INET6, addr_ptr, out, out_len);
-  } else {
+  if (local_addr.ss_family != AF_INET6) {
     log_error("[ipdetect] unexpected address family: %d", (int) local_addr.ss_family);
-    return -1;
+    err = -1;
+    goto err_cleanup;
   }
 
+  struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &local_addr;
+  addr_ptr                  = &sin6->sin6_addr;
+
+  addr_str = inet_ntop(AF_INET6, addr_ptr, out, out_len);
   if (!addr_str) {
     log_error("[ipdetect] inet_ntop failed");
-    return -1;
+    err = -1;
+    goto err_cleanup;
   }
 
   /* 过滤掉链路本地地址（理论上不应该出现，但做个保险） */
   if (strncasecmp(out, "fe80:", 5) == 0 || strncasecmp(out, "fe80::", 6) == 0) {
     log_error("[ipdetect] got link-local address %s, not a WAN address", out);
-    return -1;
+    err = -1;
+    goto err_cleanup;
   }
 
-  return 0;
+  err = 0;
+
+err_cleanup:
+  if (sockfd >= 0) {
+    close(sockfd);
+    sockfd = -1;
+  }
+  if (res) {
+    freeaddrinfo(res);
+  }
+
+  return err;
 }
 
 int detect_public_ip(const char *url, const char *ip_version, char *out, size_t out_len) {
   char final_url[256];
-  char buf[512];
-  int  rc;
+  int  err;
 
   if (!out || out_len == 0) {
     return -1;
@@ -298,41 +305,35 @@ int detect_public_ip(const char *url, const char *ip_version, char *out, size_t 
    */
   int family = ip_family_from_version(ip_version);
   if (family == 6 && (!url || url[0] == '\0' || streq(url, TUMGRD_DEFAULT_IP_CHECK_URL))) {
-    rc = detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
-    if (rc == 0) {
+    err = detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
+    if (err == 0) {
       return 0;
     }
     log_info("[ipdetect] IPv6 connect method failed, fallback to HTTP check");
   }
 
-  /*
-   * 优先 OpenWrt 常见的 uclient-fetch
-   */
   {
-    char *argv[] = {"uclient-fetch", "-qO-", final_url, NULL};
+    char buf[512];
 
-    buf[0] = '\0';
-    rc     = exec_capture(argv, buf, sizeof(buf));
-    if (rc == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
-      return 0;
-    }
-  }
+    const char *bins[] = {
+      "uclient-fetch",
+      "wget",
+    };
 
-  /*
-   * 回退到 wget
-   */
-  {
-    char *argv[] = {"wget", "-qO-", final_url, NULL};
+    char *argv[] = {NULL, "-qO-", (char *) final_url, NULL};
 
-    buf[0] = '\0';
-    rc     = exec_capture(argv, buf, sizeof(buf));
-    if (rc == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
-      return 0;
+    for (int i = 0; i < 2; i++) {
+      buf[0]  = '\0';
+      argv[0] = (char *) bins[i];
+
+      err = exec_capture(argv, buf, sizeof(buf));
+      if (err == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
+        return 0;
+      }
     }
   }
 
   log_error("[ipdetect] failed url=%s ip_version=%s", final_url, ip_version ? ip_version : "");
-
   return -1;
 }
 
