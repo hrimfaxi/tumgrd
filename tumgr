@@ -364,6 +364,25 @@ cmd_status() {
     updated=$(echo "$json" | jsonfilter -e "@.nodes[$i].last_updated")
     status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
 
+    if [ -n "$NO_COLOR" ] && [ "$NO_COLOR" != "0" ]; then
+      C_GREEN=""
+      C_RED=""
+      C_RESET=""
+    else
+      C_GREEN=$(printf '\033[32m')
+      C_RED=$(printf '\033[31m')
+      C_RESET=$(printf '\033[0m')
+    fi
+
+    case "$status" in
+      active)
+        status="${C_GREEN}active${C_RESET}"
+        ;;
+      *)
+        status="${C_RED}${status}${C_RESET}"
+        ;;
+    esac
+
     # 默认值兜底
     [ -n "$mem" ] || mem=0
     [ -n "$ver" ] || ver="-"
