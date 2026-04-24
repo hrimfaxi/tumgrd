@@ -91,17 +91,17 @@ static void add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
  */
 static int resolve_node(struct tumgrd_db *db, const char *uid, const char *server_host, int server_port, const char *ip_version,
                         struct tumgrd_node *out) {
-  int rc;
+  int err;
 
   if (!db || !uid || !server_host || !ip_version || !out) {
     return -1;
   }
 
-  rc = tumgrd_db_get_node(db, server_host, server_port, uid, ip_version, out);
-  if (rc == 0) {
+  err = tumgrd_db_get_node(db, server_host, server_port, uid, ip_version, out);
+  if (err == 0) {
     return 0;
   }
-  if (rc == 1) {
+  if (err == 1) {
     return 1;
   }
 
