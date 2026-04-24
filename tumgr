@@ -340,15 +340,24 @@ cmd_status() {
 
   json="$(ubus_call status "$payload")"
 
-  # SERVER 列宽（可以调大/调小）
   host_width=40
+  ip_width=38
 
-  # 表头
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
+  if [ -n "$NO_COLOR" ] && [ "$NO_COLOR" != "0" ]; then
+    C_GREEN=""
+    C_RED=""
+    C_RESET=""
+  else
+    C_GREEN=$(printf '\033[32m')
+    C_RED=$(printf '\033[31m')
+    C_RESET=$(printf '\033[0m')
+  fi
+
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
     "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "UPDATED" "STATUS"
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
-    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "---------------" "-------------------" "----------"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
+    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "-------------------" "----------"
 
   count=$(echo "$json" | jsonfilter -e '@.nodes[@.uid]' | wc -l)
 
@@ -362,34 +371,12 @@ cmd_status() {
     ver=$(echo "$json" | jsonfilter -e "@.nodes[$i].ip_version")
     ip=$(echo "$json" | jsonfilter -e "@.nodes[$i].current_ip")
     updated=$(echo "$json" | jsonfilter -e "@.nodes[$i].last_updated")
-    status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
+    raw_status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
 
-    if [ -n "$NO_COLOR" ] && [ "$NO_COLOR" != "0" ]; then
-      C_GREEN=""
-      C_RED=""
-      C_RESET=""
-    else
-      C_GREEN=$(printf '\033[32m')
-      C_RED=$(printf '\033[31m')
-      C_RESET=$(printf '\033[0m')
-    fi
-
-    case "$status" in
-      active)
-        status="${C_GREEN}active${C_RESET}"
-        ;;
-      *)
-        status="${C_RED}${status}${C_RESET}"
-        ;;
-    esac
-
-    # 默认值兜底
     [ -n "$mem" ] || mem=0
     [ -n "$ver" ] || ver="-"
     [ -n "$ip" ] || ip="-"
-    [ -n "$status" ] || status="-"
 
-    # 时间格式化（关键）
     if [ -n "$updated" ]; then
       updated_fmt=$(date -d "@$updated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
       [ -n "$updated_fmt" ] && updated="$updated_fmt"
@@ -397,10 +384,25 @@ cmd_status() {
       updated="-"
     fi
 
-    # 防止 hostname 过长撑爆（可选截断）
+    status="$raw_status"
+
+    case "$status" in
+      active)
+        status="${C_GREEN}active${C_RESET}"
+        ;;
+      ""|-)
+        status="-"
+        ;;
+      *)
+        status="${C_RED}${status}${C_RESET}"
+        ;;
+    esac
+
     host=$(printf "%.${host_width}s" "$host")
 
-    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
+    ip=$(printf "%.${ip_width}s" "$ip")
+
+    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
       "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$updated" "$status"
 
     i=$((i + 1))
