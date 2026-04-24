@@ -315,18 +315,12 @@ cmd_refresh() {
 
 cmd_status() {
   json_output="false"
-  socket_path=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -json|-j)
         json_output="true"
-        shift 1
-        ;;
-      -socket|-s)
-        [ $# -ge 2 ] || err "option -socket requires an argument"
-        socket_path="$2"
-        shift 2
+        shift
         ;;
       -h|--help)
         usage
@@ -338,13 +332,60 @@ cmd_status() {
   done
 
   payload="{}"
+
   if [ "$json_output" = "true" ]; then
-    # ubus 调用本身返回 JSON，这里只是标记需要原始 JSON 输出
-    # 实际处理由调用者决定，ubus_call 直接返回 JSON
-    :
+    ubus_call status "$payload"
+    return
   fi
 
-  ubus_call status "$payload"
+  json="$(ubus_call status "$payload")"
+
+  # SERVER 列宽（可以调大/调小）
+  host_width=40
+
+  # 表头
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
+    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "UPDATED" "STATUS"
+
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
+    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "---------------" "-------------------" "----------"
+
+  count=$(echo "$json" | jsonfilter -e '@.nodes[@.uid]' | wc -l)
+
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    uid=$(echo "$json" | jsonfilter -e "@.nodes[$i].uid")
+    host=$(echo "$json" | jsonfilter -e "@.nodes[$i].server_host")
+    sport=$(echo "$json" | jsonfilter -e "@.nodes[$i].server_port")
+    cport=$(echo "$json" | jsonfilter -e "@.nodes[$i].client_port")
+    mem=$(echo "$json" | jsonfilter -e "@.nodes[$i].memlimit")
+    ver=$(echo "$json" | jsonfilter -e "@.nodes[$i].ip_version")
+    ip=$(echo "$json" | jsonfilter -e "@.nodes[$i].current_ip")
+    updated=$(echo "$json" | jsonfilter -e "@.nodes[$i].last_updated")
+    status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
+
+    # 默认值兜底
+    [ -n "$mem" ] || mem=0
+    [ -n "$ver" ] || ver="-"
+    [ -n "$ip" ] || ip="-"
+    [ -n "$status" ] || status="-"
+
+    # 时间格式化（关键）
+    if [ -n "$updated" ]; then
+      updated_fmt=$(date -d "@$updated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
+      [ -n "$updated_fmt" ] && updated="$updated_fmt"
+    else
+      updated="-"
+    fi
+
+    # 防止 hostname 过长撑爆（可选截断）
+    host=$(printf "%.${host_width}s" "$host")
+
+    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-15s %-19s %-10s\n" \
+      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$updated" "$status"
+
+    i=$((i + 1))
+  done
 }
 
 cmd_dump() {
