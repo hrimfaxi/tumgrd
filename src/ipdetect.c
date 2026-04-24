@@ -120,7 +120,7 @@ static void build_url(const char *url, char *buf, size_t buf_len) {
   }
 
   if (strstr(url, "://")) {
-    copy_string(buf, buf_len, "url");
+    copy_string(buf, buf_len, url);
   } else {
     snprintf(buf, buf_len, "http://%s", url);
   }
