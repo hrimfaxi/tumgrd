@@ -146,7 +146,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   struct tumgrd_node old_node;
   int                get_rc;
   const char        *action;
-  int                rc;
+  int                err;
   struct blob_buf    b = {0};
 
   (void) method;
@@ -200,8 +200,8 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     snprintf(node.ip_version, sizeof(node.ip_version), "%s", blobmsg_get_string(tb[REG_IP_VERSION]));
   }
 
-  rc = tumgrd_db_upsert_node(&tctx->db, &node);
-  if (rc != 0) {
+  err = tumgrd_db_upsert_node(&tctx->db, &node);
+  if (err != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
@@ -209,12 +209,12 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    * register 后立刻应用配置。
    * 失败时仍保留 DB 中的 desired state，方便后续自愈。
    */
-  rc = tumgrd_reconcile_one(&tctx->db, &node, true);
+  err = tumgrd_reconcile_one(&tctx->db, &node, true);
 
   blob_buf_init(&b, 0);
-  blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "stored_but_apply_failed");
+  blobmsg_add_string(&b, "status", err == 0 ? "ok" : "stored_but_apply_failed");
   blobmsg_add_string(&b, "action", action);
-  blobmsg_add_u8(&b, "applied", rc == 0 ? 1 : 0);
+  blobmsg_add_u8(&b, "applied", err == 0 ? 1 : 0);
   add_node_brief(&b, &node);
   ubus_send_reply(ctx, req, b.head);
   blob_buf_free(&b);
@@ -314,7 +314,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   bool              is_all;
   bool              is_force;
   struct blob_buf   b = {0};
-  int               rc;
+  int               err;
 
   (void) method;
 
@@ -328,9 +328,9 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   blob_buf_init(&b, 0);
 
   if (is_all) {
-    rc = tumgrd_reconcile_all(&tctx->db, is_force);
+    err = tumgrd_reconcile_all(&tctx->db, is_force);
 
-    blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "partial_error");
+    blobmsg_add_string(&b, "status", err == 0 ? "ok" : "partial_error");
     blobmsg_add_string(&b, "scope", "all");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
 
@@ -363,9 +363,9 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
       return UBUS_STATUS_UNKNOWN_ERROR;
     }
 
-    rc = tumgrd_reconcile_one(&tctx->db, &node, is_force);
+    err = tumgrd_reconcile_one(&tctx->db, &node, is_force);
 
-    blobmsg_add_string(&b, "status", rc == 0 ? "ok" : "error");
+    blobmsg_add_string(&b, "status", err == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
     blobmsg_add_string(&b, "note", "force accepted for compatibility; current reconcile path is always full apply");
@@ -386,7 +386,7 @@ static int handle_status(struct ubus_context *ctx, struct ubus_object *obj, stru
   struct tumgrd_node *nodes = NULL;
   size_t              count = 0;
   size_t              i;
-  int                 rc;
+  int                 err;
   struct blob_buf     b = {0};
   void               *array;
 
@@ -395,8 +395,8 @@ static int handle_status(struct ubus_context *ctx, struct ubus_object *obj, stru
 
   struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
 
-  rc = tumgrd_db_list_nodes(&tctx->db, &nodes, &count);
-  if (rc != 0) {
+  err = tumgrd_db_list_nodes(&tctx->db, &nodes, &count);
+  if (err != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
