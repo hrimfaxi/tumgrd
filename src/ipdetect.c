@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -230,17 +231,49 @@ static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, siz
   /* 尝试连接第一个可用的地址 */
   for (rp = res; rp != NULL; rp = rp->ai_next) {
     sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-    if (sockfd < 0) {
+    if (sockfd < 0)
+      continue;
+
+    // ---- 非阻塞 connect 实现超时 ----
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    int ret = connect(sockfd, rp->ai_addr, rp->ai_addrlen);
+    if (ret < 0 && errno != EINPROGRESS) {
+      close(sockfd);
+      sockfd = -1;
       continue;
     }
 
-    /* 非阻塞连接也可以，但这里用阻塞更简单 */
-    if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0) {
-      break; /* 连接成功 */
+    if (ret < 0 && errno == EINPROGRESS) {
+      fd_set         wfds;
+      struct timeval tv;
+
+      FD_ZERO(&wfds);
+      FD_SET(sockfd, &wfds);
+      tv.tv_sec  = 3;
+      tv.tv_usec = 0;
+
+      ret = select(sockfd + 1, NULL, &wfds, NULL, &tv);
+      if (ret <= 0) {
+        close(sockfd);
+        sockfd = -1;
+        continue;
+      }
+
+      int       so_error;
+      socklen_t len = sizeof(so_error);
+      getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+      if (so_error != 0) {
+        close(sockfd);
+        sockfd = -1;
+        continue;
+      }
     }
 
-    close(sockfd);
-    sockfd = -1;
+    // 连接成功，恢复阻塞模式（可选）
+    fcntl(sockfd, F_SETFL, flags);
+    break;
   }
 
   if (sockfd < 0) {
