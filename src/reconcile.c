@@ -46,8 +46,8 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
 
   now = now_unix();
 
-  log_info("[reconcile] start uid=%s server=%s:%d client_port=%d force=%d old_ip=%s", node->uid, node->server_host,
-           node->server_port, node->client_port, force ? 1 : 0, node->current_ip);
+  log_info("[reconcile] start uid=%s server=%s:%d client_port=%d force=%d old_ip=%s ip_version=%s", node->uid,
+           node->server_host, node->server_port, node->client_port, force ? 1 : 0, node->current_ip, node->ip_version);
 
   try2(mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_SYNCING, now), "[reconcile] failed to mark syncing uid=%s",
        node->uid);
