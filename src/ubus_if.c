@@ -460,10 +460,10 @@ int tumgrd_ubus_init(struct tumgrd_ctx *ctx) {
   ctx->net_event_handler.cb = net_event_cb;
   err                       = ubus_register_event_handler(ctx->ubus, &ctx->net_event_handler, "network.interface");
   if (err != 0) {
-    tumgrd_ubus_cleanup(ctx);
-    return err;
+    log_warn("ubus_register_event_handler failed: %d", err);
+  } else {
+    ctx->net_event_registered = true;
   }
-  ctx->net_event_registered = true;
 
   ctx->ubus_obj.name      = "tumgrd";
   ctx->ubus_obj.type      = &tumgrd_obj_type;
