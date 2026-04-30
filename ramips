@@ -3,7 +3,8 @@
 set -e
 
 export STAGING_DIR=~/temp/openwrt-sdk-25.12.2-ramips-mt7621_gcc-14.3.0_musl.Linux-x86_64/staging_dir
-mkdir -p build
+rm -rf build
+mkdir build
 cmake -DCMAKE_TOOLCHAIN_FILE=$(pwd)/openwrt-ramips.cmake -B build . \
   -DCMAKE_BUILD_TYPE=MinSizeRel
 cmake --build build --target clean
