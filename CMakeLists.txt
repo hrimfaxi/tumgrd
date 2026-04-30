@@ -49,12 +49,12 @@ if (NOT UBUS_LIBRARY)
   message(FATAL_ERROR "libubus library not found")
 endif()
 
-if (NOT UCI_INCLUDE_DIR)
-  message(FATAL_ERROR "libuci headers not found")
-endif()
-
-if (NOT UCI_LIBRARY)
-  message(FATAL_ERROR "libuci library not found")
+# Log warnings if UCI is not found, but do not stop the build
+if (NOT UCI_INCLUDE_DIR OR NOT UCI_LIBRARY)
+  message(WARNING "libuci headers or library not found, UCI will be disabled.")
+else()
+  # Define TUMGRD_UCI_ENABLED if UCI is found
+  add_definitions(-DTUMGRD_UCI_ENABLED)
 endif()
 
 message(STATUS "UBOX_INCLUDE_DIR = ${UBOX_INCLUDE_DIR}")
@@ -80,15 +80,19 @@ add_executable(tumgrd
 target_include_directories(tumgrd PRIVATE
   ${UBOX_INCLUDE_DIR}
   ${UBUS_INCLUDE_DIR}
-  ${UCI_INCLUDE_DIR}
   ${SQLite3_INCLUDE_DIRS}
 )
 
 target_link_libraries(tumgrd PRIVATE
   ${UBOX_LIBRARY}
   ${UBUS_LIBRARY}
-  ${UCI_LIBRARY}
   SQLite::SQLite3
 )
+
+# If UCI is found, link the library and include the headers
+if (UCI_INCLUDE_DIR AND UCI_LIBRARY)
+  target_include_directories(tumgrd PRIVATE ${UCI_INCLUDE_DIR})
+  target_link_libraries(tumgrd PRIVATE ${UCI_LIBRARY})
+endif()
 
 # vim: set sw=2 ts=2 et:

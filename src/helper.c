@@ -2,7 +2,9 @@
 #include "log.h"
 #include "try.h"
 
+#ifdef TUMGRD_UCI_ENABLED
 #include <uci.h>
+#endif
 
 #include <ctype.h>
 #include <errno.h>
@@ -185,6 +187,7 @@ int ensure_parent_dir(const char *path) {
 }
 
 int check_wan_interface(const char *ifname, bool *is_wan) {
+#ifdef TUMGRD_UCI_ENABLED
   struct uci_context *ctx     = NULL;
   struct uci_ptr      ptr     = {};
   char                query[] = "network.wan.device";
@@ -220,6 +223,11 @@ err_cleanup:
   }
 
   return err;
+#else
+  (void) ifname;
+  (void) is_wan;
+  return -1;
+#endif
 }
 
 // vim: set sw=2 ts=2 et:
