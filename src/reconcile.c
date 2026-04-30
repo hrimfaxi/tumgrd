@@ -93,7 +93,7 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
   }
 
   try2(tumgrd_db_list_nodes(db, &nodes, &count), "[reconcile] list nodes failed");
-  log_info("[reconcile] reconcile_all count=%zu force=%d", count, force ? 1 : 0);
+  log_info("[reconcile] establishing tuctl: reconcile_all count=%zu force=%d", count, force ? 1 : 0);
 
   for (i = 0; i < count; i++) {
     if (tumgrd_reconcile_one(db, &nodes[i], force)) {
