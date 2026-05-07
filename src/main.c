@@ -82,6 +82,7 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->log_level = optarg;
       break;
     case 3:
+      log_info("xor enabled");
       cfg->enable_xor = true;
       break;
     case 4:
