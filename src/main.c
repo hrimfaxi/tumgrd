@@ -82,7 +82,6 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->log_level = optarg;
       break;
     case 3:
-      log_info("xor enabled");
       cfg->enable_xor = true;
       break;
     case 4:
@@ -168,10 +167,10 @@ int main(int argc, char **argv) {
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s",
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s%s",
            nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
            ctx.cfg.interval_sec, nonempty_or_default(ctx.cfg.log_level, "(null)"),
-           nonempty_or_default(ctx.cfg.client_bin, "(null)"));
+           nonempty_or_default(ctx.cfg.client_bin, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "");
 
   uloop_run();
 
