@@ -293,13 +293,19 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
   char *script              = NULL;
   char  comment[256]        = {0};
   char  comment_suffix[280] = {0};
+  char  xor_suffix[140]     = {0};
 
   sanitize_comment(node->client_comment, comment, sizeof(comment));
   if (comment[0] != '\0') {
     snprintf(comment_suffix, sizeof(comment_suffix), " comment %s", comment);
   }
 
-  try2(asprintf(&script, "server-add uid %s port %d address %s%s\n", node->uid, node->client_port, current_ip, comment_suffix),
+  if (node->xor_key[0] != '\0') {
+    snprintf(xor_suffix, sizeof(xor_suffix), " xor %s", node->xor_key);
+  }
+
+  try2(asprintf(&script, "server-add uid %s port %d address %s%s%s\n", node->uid, node->client_port, current_ip, xor_suffix,
+                comment_suffix),
        "asprintf");
 
   log_trimmed("[runner] server add stdin", script);
@@ -357,6 +363,11 @@ int tumgrd_runner_client_add(const struct tumgrd_node *node) {
   if (node->description[0] != '\0') {
     argv[argc++] = "comment";
     argv[argc++] = (char *) node->description;
+  }
+
+  if (node->xor_key[0] != '\0') {
+    argv[argc++] = "xor";
+    argv[argc++] = (char *) node->xor_key;
   }
 
   argv[argc] = NULL;

@@ -16,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static int parse_u32(const char *input, uint32_t *out_u32) {
   char         *endptr = NULL;
@@ -228,6 +229,35 @@ err_cleanup:
   (void) is_wan;
   return -1;
 #endif
+}
+
+int generate_random_hex_key(char *out, size_t out_size, size_t key_bytes) {
+  if (!out || out_size < key_bytes * 2 + 1)
+    return -1;
+  if (key_bytes < 16 || key_bytes > 64)
+    return -1; // 按题目要求：16~64 字节
+
+  unsigned char buf[64]; // 最大 64 字节
+  int           fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0)
+    return -1;
+
+  size_t total = 0;
+  while (total < key_bytes) {
+    ssize_t n = read(fd, buf + total, key_bytes - total);
+    if (n <= 0) {
+      close(fd);
+      return -1;
+    }
+    total += n;
+  }
+  close(fd);
+
+  for (size_t i = 0; i < key_bytes; i++) {
+    sprintf(out + i * 2, "%02x", buf[i]);
+  }
+  out[key_bytes * 2] = '\0';
+  return 0;
 }
 
 // vim: set sw=2 ts=2 et:

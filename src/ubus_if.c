@@ -123,6 +123,7 @@ enum {
   REG_MEMLIMIT,
   REG_IP_CHECK_URL,
   REG_IP_VERSION,
+  REG_XOR_KEY,
   __REG_MAX
 };
 
@@ -137,6 +138,7 @@ static const struct blobmsg_policy reg_policy[__REG_MAX] = {
   [REG_MEMLIMIT]       = {.name = "memlimit", .type = BLOBMSG_TYPE_INT32},
   [REG_IP_CHECK_URL]   = {.name = "ip_check_url", .type = BLOBMSG_TYPE_STRING},
   [REG_IP_VERSION]     = {.name = "ip_version", .type = BLOBMSG_TYPE_STRING},
+  [REG_XOR_KEY]        = {.name = "xor_key", .type = BLOBMSG_TYPE_STRING},
 };
 
 static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, struct ubus_request_data *req, const char *method,
@@ -179,6 +181,18 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   node.client_port = (int) blobmsg_get_u32(tb[REG_CLIENT_PORT]);
   snprintf(node.psk, sizeof(node.psk), "%s", blobmsg_get_string(tb[REG_PSK]));
 
+  // 如果是创建且启用 XOR，生成随机密钥
+  if (strcmp(action, "created") == 0 && tctx->cfg.enable_xor) {
+    if (generate_random_hex_key(node.xor_key, sizeof(node.xor_key), 64) != 0) {
+      log_error("Failed to generate XOR key for node %s", node.uid);
+      return UBUS_STATUS_UNKNOWN_ERROR;
+    }
+    log_info("Generated XOR key for node %s", node.uid);
+  } else if (strcmp(action, "updated") == 0) {
+    // 更新时保留原有 XOR 密钥（已从 old_node 复制）
+    // 注意：node = old_node 已经复制了 xor_key
+  }
+
   if (tb[REG_DESCRIPTION]) {
     snprintf(node.description, sizeof(node.description), "%s", blobmsg_get_string(tb[REG_DESCRIPTION]));
   }
@@ -198,6 +212,11 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
 
   if (tb[REG_IP_VERSION]) {
     snprintf(node.ip_version, sizeof(node.ip_version), "%s", blobmsg_get_string(tb[REG_IP_VERSION]));
+  }
+
+  if (tb[REG_XOR_KEY]) {
+    log_info("Override XOR key for node %s", node.uid);
+    snprintf(node.xor_key, sizeof(node.xor_key), "%s", blobmsg_get_string(tb[REG_XOR_KEY]));
   }
 
   err = tumgrd_db_upsert_node(&tctx->db, &node);

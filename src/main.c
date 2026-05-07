@@ -30,6 +30,7 @@ static void config_init(struct tumgrd_config *cfg) {
   cfg->client_bin   = DEFAULT_CLIENT_BIN;
   cfg->log_level    = DEFAULT_LOG_LEVEL;
   cfg->interval_sec = DEFAULT_INTERVAL;
+  cfg->enable_xor   = false;
 }
 
 static void usage(FILE *out, const char *prog) {
@@ -42,6 +43,8 @@ static void usage(FILE *out, const char *prog) {
           "  -s, --socket PATH        unix socket path (default: %s)\n"
           "      --client-bin PATH    path to tuctl_client binary (default: %s)\n"
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
+          "      --enable-xor         enable automatic XOR key generation for new nodes\n"
+          "      --disable-xor        disable automatic XOR key generation (default)\n"
           "  -h, --help               show this help\n",
           prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_CLIENT_BIN,
           DEFAULT_LOG_LEVEL);
@@ -57,6 +60,8 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
                                             {"client-bin", required_argument, NULL, 1},
                                             {"log-level", required_argument, NULL, 2},
                                             {"help", no_argument, NULL, 'h'},
+                                            {"enable-xor", no_argument, NULL, 3},
+                                            {"disable-xor", no_argument, NULL, 4},
                                             {0, 0, 0, 0}};
 
   while ((c = getopt_long(argc, argv, "d:i:s:h", long_opts, NULL)) != -1) {
@@ -75,6 +80,12 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       break;
     case 2:
       cfg->log_level = optarg;
+      break;
+    case 3:
+      cfg->enable_xor = true;
+      break;
+    case 4:
+      cfg->enable_xor = false;
       break;
     case 'h':
       usage(stdout, argv[0]);

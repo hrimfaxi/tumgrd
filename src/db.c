@@ -102,6 +102,7 @@ static int row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
   column_text(stmt, 11, node->current_ip, sizeof(node->current_ip));
   node->last_updated = (int64_t) sqlite3_column_int64(stmt, 12);
   column_text(stmt, 13, node->status, sizeof(node->status));
+  column_text(stmt, 14, node->xor_key, sizeof(node->xor_key));
 
   return 0;
 }
@@ -148,6 +149,7 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
                            " current_ip TEXT,"
                            " last_updated INTEGER,"
                            " status TEXT DEFAULT 'active',"
+                           " xor_key TEXT,"
                            " PRIMARY KEY (server_host, server_port, uid, ip_version),"
                            " UNIQUE (server_host, server_port, client_port, ip_version)"
                            ");";
@@ -184,9 +186,9 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status"
+                           " last_updated, status, xor_key"
                            ") VALUES ("
-                           " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
+                           " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
                            ") "
                            "ON CONFLICT(server_host, server_port, uid, ip_version) DO UPDATE SET "
                            " description=excluded.description,"
@@ -198,7 +200,8 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
                            " ip_check_url=excluded.ip_check_url,"
                            " current_ip=excluded.current_ip,"
                            " last_updated=excluded.last_updated,"
-                           " status=excluded.status;";
+                           " status=excluded.status,"
+                           " xor_key=excluded.xor_key;";
 
   sqlite3_stmt      *stmt = NULL;
   struct tumgrd_node n;
@@ -244,6 +247,7 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   SQLITE_TRY(bind_text_or_null(stmt, 12, nonempty_or_null(n.current_ip)), conn, "bind(current_ip)");
   SQLITE_TRY(sqlite3_bind_int64(stmt, 13, (sqlite3_int64) n.last_updated), conn, "bind(last_updated)");
   SQLITE_TRY(bind_text_or_null(stmt, 14, nonempty_or_null(n.status)), conn, "bind(status)");
+  SQLITE_TRY(bind_text_or_null(stmt, 15, nonempty_or_null(n.xor_key)), conn, "bind(xor_key)");
   SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(upsert)");
   err = 0;
 err_cleanup:
@@ -258,7 +262,7 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status"
+                           " last_updated, status, xor_key"
                            " FROM nodes"
                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
                            " LIMIT 1;";
@@ -333,7 +337,7 @@ int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status"
+                           " last_updated, status, xor_key"
                            " FROM nodes"
                            " ORDER BY server_host, server_port, uid;";
 

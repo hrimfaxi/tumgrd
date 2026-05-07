@@ -27,6 +27,7 @@ struct tumgrd_node {
   char    current_ip[64];
   int64_t last_updated;
   char    status[32];
+  char    xor_key[129];
 };
 
 struct tumgrd_db {
@@ -40,6 +41,7 @@ struct tumgrd_config {
   const char *client_bin;
   const char *log_level;
   uint32_t    interval_sec;
+  bool        enable_xor;
 };
 
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);
