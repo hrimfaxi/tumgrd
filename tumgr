@@ -340,7 +340,7 @@ cmd_status() {
 
   json="$(ubus_call status "$payload")"
 
-  host_width=40
+  host_width=30
   ip_width=38
 
   if [ -n "$NO_COLOR" ] && [ "$NO_COLOR" != "0" ]; then
@@ -353,11 +353,11 @@ cmd_status() {
     C_RESET=$(printf '\033[0m')
   fi
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
-    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "UPDATED" "STATUS" "XOR"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
+    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "XOR" "UPDATED" "STATUS"
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
-    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "-------------------" "----------" "---"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
+    "------------" "------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "---" "-------------------" "----------"
 
   count=$(echo "$json" | jsonfilter -e '@.nodes[@.uid]' | wc -l)
 
@@ -407,8 +407,8 @@ cmd_status() {
     host=$(printf "%.${host_width}s" "$host")
     ip=$(printf "%.${ip_width}s" "$ip")
 
-    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
-      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$updated" "$status" "$xor_display"
+    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
+      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$xor_display" "$updated" "$status"
 
     i=$((i + 1))
   done
