@@ -142,7 +142,7 @@ static const struct blobmsg_policy reg_policy[__REG_MAX] = {
   [REG_MEMLIMIT]       = {.name = "memlimit", .type = BLOBMSG_TYPE_INT32},
   [REG_IP_CHECK_URL]   = {.name = "ip_check_url", .type = BLOBMSG_TYPE_STRING},
   [REG_IP_VERSION]     = {.name = "ip_version", .type = BLOBMSG_TYPE_STRING},
-  [REG_XOR_KEY]        = {.name = "xor_key", .type = BLOBMSG_TYPE_STRING},
+  [REG_XOR_KEY]        = {.name = "xor", .type = BLOBMSG_TYPE_STRING},
 };
 
 static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, struct ubus_request_data *req, const char *method,
