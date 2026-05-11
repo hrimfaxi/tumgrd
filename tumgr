@@ -29,20 +29,20 @@ need_arg() {
 
 is_uint() {
   case "$1" in
-    ''|*[!0-9]*)
-      return 1
-      ;;
-    *)
-      return 0
-      ;;
+  '' | *[!0-9]*)
+    return 1
+    ;;
+  *)
+    return 0
+    ;;
   esac
 }
 
 json_escape() {
   printf '%s' "$1" | sed \
-  -e 's/\\/\\\\/g' \
-  -e 's/"/\\"/g' \
-  -e ':a;N;$!ba;s/\n/\\n/g'
+    -e 's/\\/\\\\/g' \
+    -e 's/"/\\"/g' \
+    -e ':a;N;$!ba;s/\n/\\n/g'
 }
 
 ubus_call() {
@@ -66,67 +66,67 @@ cmd_register() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      -uid|-u)
-        [ $# -ge 2 ] || err "option -uid requires an argument"
-        uid="$2"
-        shift 2
-        ;;
-      -server-host|-H)
-        [ $# -ge 2 ] || err "option -server-host requires an argument"
-        server_host="$2"
-        shift 2
-        ;;
-      -server-port|-S)
-        [ $# -ge 2 ] || err "option -server-port requires an argument"
-        server_port="$2"
-        shift 2
-        ;;
-      -client-port|-p)
-        [ $# -ge 2 ] || err "option -client-port requires an argument"
-        client_port="$2"
-        shift 2
-        ;;
-      -psk|-k)
-        [ $# -ge 2 ] || err "option -psk requires an argument"
-        psk="$2"
-        shift 2
-        ;;
-      -memlimit|-m)
-        [ $# -ge 2 ] || err "option -memlimit requires an argument"
-        memlimit="$2"
-        shift 2
-        ;;
-      -description|-d)
-        [ $# -ge 2 ] || err "option -description requires an argument"
-        description="$2"
-        shift 2
-        ;;
-      -client-comment|-c)
-        [ $# -ge 2 ] || err "option -client-comment requires an argument"
-        client_comment="$2"
-        shift 2
-        ;;
-      -ip-check-url|-i)
-        [ $# -ge 2 ] || err "option -ip-check-url requires an argument"
-        ip_check_url="$2"
-        shift 2
-        ;;
-      -ip-version|-V)
-        [ $# -ge 2 ] || err "option -ip-version requires an argument"
-        ip_version="$2"
-        shift 2
-        ;;
-      -socket|-s)
-        [ $# -ge 2 ] || err "option -socket requires an argument"
-        socket_path="$2"
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        ;;
-      *)
-        err "unknown option for register: $1"
-        ;;
+    -uid | -u)
+      [ $# -ge 2 ] || err "option -uid requires an argument"
+      uid="$2"
+      shift 2
+      ;;
+    -server-host | -H)
+      [ $# -ge 2 ] || err "option -server-host requires an argument"
+      server_host="$2"
+      shift 2
+      ;;
+    -server-port | -S)
+      [ $# -ge 2 ] || err "option -server-port requires an argument"
+      server_port="$2"
+      shift 2
+      ;;
+    -client-port | -p)
+      [ $# -ge 2 ] || err "option -client-port requires an argument"
+      client_port="$2"
+      shift 2
+      ;;
+    -psk | -k)
+      [ $# -ge 2 ] || err "option -psk requires an argument"
+      psk="$2"
+      shift 2
+      ;;
+    -memlimit | -m)
+      [ $# -ge 2 ] || err "option -memlimit requires an argument"
+      memlimit="$2"
+      shift 2
+      ;;
+    -description | -d)
+      [ $# -ge 2 ] || err "option -description requires an argument"
+      description="$2"
+      shift 2
+      ;;
+    -client-comment | -c)
+      [ $# -ge 2 ] || err "option -client-comment requires an argument"
+      client_comment="$2"
+      shift 2
+      ;;
+    -ip-check-url | -i)
+      [ $# -ge 2 ] || err "option -ip-check-url requires an argument"
+      ip_check_url="$2"
+      shift 2
+      ;;
+    -ip-version | -V)
+      [ $# -ge 2 ] || err "option -ip-version requires an argument"
+      ip_version="$2"
+      shift 2
+      ;;
+    -socket | -s)
+      [ $# -ge 2 ] || err "option -socket requires an argument"
+      socket_path="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      ;;
+    *)
+      err "unknown option for register: $1"
+      ;;
     esac
   done
 
@@ -183,37 +183,37 @@ cmd_deregister() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      -uid|-u)
-        [ $# -ge 2 ] || err "option -uid requires an argument"
-        uid="$2"
-        shift 2
-        ;;
-      -server-host|-H)
-        [ $# -ge 2 ] || err "option -server-host requires an argument"
-        server_host="$2"
-        shift 2
-        ;;
-      -server-port|-S)
-        [ $# -ge 2 ] || err "option -server-port requires an argument"
-        server_port="$2"
-        shift 2
-        ;;
-      -ip-version|-V)
-        [ $# -ge 2 ] || err "option -ip-version requires an argument"
-        ip_version="$2"
-        shift 2
-        ;;
-      -socket|-s)
-        [ $# -ge 2 ] || err "option -socket requires an argument"
-        socket_path="$2"
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        ;;
-      *)
-        err "unknown option for deregister: $1"
-        ;;
+    -uid | -u)
+      [ $# -ge 2 ] || err "option -uid requires an argument"
+      uid="$2"
+      shift 2
+      ;;
+    -server-host | -H)
+      [ $# -ge 2 ] || err "option -server-host requires an argument"
+      server_host="$2"
+      shift 2
+      ;;
+    -server-port | -S)
+      [ $# -ge 2 ] || err "option -server-port requires an argument"
+      server_port="$2"
+      shift 2
+      ;;
+    -ip-version | -V)
+      [ $# -ge 2 ] || err "option -ip-version requires an argument"
+      ip_version="$2"
+      shift 2
+      ;;
+    -socket | -s)
+      [ $# -ge 2 ] || err "option -socket requires an argument"
+      socket_path="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      ;;
+    *)
+      err "unknown option for deregister: $1"
+      ;;
     esac
   done
 
@@ -245,45 +245,45 @@ cmd_refresh() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      -uid|-u)
-        [ $# -ge 2 ] || err "option -uid requires an argument"
-        uid="$2"
-        shift 2
-        ;;
-      -server-host|-H)
-        [ $# -ge 2 ] || err "option -server-host requires an argument"
-        server_host="$2"
-        shift 2
-        ;;
-      -server-port|-S)
-        [ $# -ge 2 ] || err "option -server-port requires an argument"
-        server_port="$2"
-        shift 2
-        ;;
-      -ip-version|-V)
-        [ $# -ge 2 ] || err "option -ip-version requires an argument"
-        ip_version="$2"
-        shift 2
-        ;;
-      -all|-a)
-        all="true"
-        shift 1
-        ;;
-      -force|-f)
-        force="true"
-        shift 1
-        ;;
-      -socket|-s)
-        [ $# -ge 2 ] || err "option -socket requires an argument"
-        socket_path="$2"
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        ;;
-      *)
-        err "unknown option for refresh: $1"
-        ;;
+    -uid | -u)
+      [ $# -ge 2 ] || err "option -uid requires an argument"
+      uid="$2"
+      shift 2
+      ;;
+    -server-host | -H)
+      [ $# -ge 2 ] || err "option -server-host requires an argument"
+      server_host="$2"
+      shift 2
+      ;;
+    -server-port | -S)
+      [ $# -ge 2 ] || err "option -server-port requires an argument"
+      server_port="$2"
+      shift 2
+      ;;
+    -ip-version | -V)
+      [ $# -ge 2 ] || err "option -ip-version requires an argument"
+      ip_version="$2"
+      shift 2
+      ;;
+    -all | -a)
+      all="true"
+      shift 1
+      ;;
+    -force | -f)
+      force="true"
+      shift 1
+      ;;
+    -socket | -s)
+      [ $# -ge 2 ] || err "option -socket requires an argument"
+      socket_path="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      ;;
+    *)
+      err "unknown option for refresh: $1"
+      ;;
     esac
   done
 
@@ -318,16 +318,16 @@ cmd_status() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      -json|-j)
-        json_output="true"
-        shift
-        ;;
-      -h|--help)
-        usage
-        ;;
-      *)
-        err "unknown option for status: $1"
-        ;;
+    -json | -j)
+      json_output="true"
+      shift
+      ;;
+    -h | --help)
+      usage
+      ;;
+    *)
+      err "unknown option for status: $1"
+      ;;
     esac
   done
 
@@ -353,11 +353,11 @@ cmd_status() {
     C_RESET=$(printf '\033[0m')
   fi
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
-    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "UPDATED" "STATUS"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
+    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "UPDATED" "STATUS" "XOR"
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
-    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "-------------------" "----------"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
+    "------------" "----------------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "-------------------" "----------" "---"
 
   count=$(echo "$json" | jsonfilter -e '@.nodes[@.uid]' | wc -l)
 
@@ -372,6 +372,7 @@ cmd_status() {
     ip=$(echo "$json" | jsonfilter -e "@.nodes[$i].current_ip")
     updated=$(echo "$json" | jsonfilter -e "@.nodes[$i].last_updated")
     raw_status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
+    xor_val=$(echo "$json" | jsonfilter -e "@.nodes[$i].xor")
 
     [ -n "$mem" ] || mem=0
     [ -n "$ver" ] || ver="-"
@@ -385,25 +386,29 @@ cmd_status() {
     fi
 
     status="$raw_status"
-
     case "$status" in
-      active)
-        status="${C_GREEN}active${C_RESET}"
-        ;;
-      ""|-)
-        status="-"
-        ;;
-      *)
-        status="${C_RED}${status}${C_RESET}"
-        ;;
+    active)
+      status="${C_GREEN}active${C_RESET}"
+      ;;
+    "" | -)
+      status="-"
+      ;;
+    *)
+      status="${C_RED}${status}${C_RESET}"
+      ;;
     esac
 
-    host=$(printf "%.${host_width}s" "$host")
+    if [ -n "$xor_val" ]; then
+      xor_display="yes"
+    else
+      xor_display="no"
+    fi
 
+    host=$(printf "%.${host_width}s" "$host")
     ip=$(printf "%.${ip_width}s" "$ip")
 
-    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s\n" \
-      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$updated" "$status"
+    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-19s %-10s %-5s\n" \
+      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$updated" "$status" "$xor_display"
 
     i=$((i + 1))
   done
@@ -414,17 +419,17 @@ cmd_dump() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      -socket|-s)
-        [ $# -ge 2 ] || err "option -socket requires an argument"
-        socket_path="$2"
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        ;;
-      *)
-        err "unknown option for dump: $1"
-        ;;
+    -socket | -s)
+      [ $# -ge 2 ] || err "option -socket requires an argument"
+      socket_path="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      ;;
+    *)
+      err "unknown option for dump: $1"
+      ;;
     esac
   done
 
@@ -435,32 +440,32 @@ main() {
   [ $# -ge 1 ] || usage
 
   case "$1" in
-    register)
-      shift
-      cmd_register "$@"
-      ;;
-    deregister)
-      shift
-      cmd_deregister "$@"
-      ;;
-    refresh)
-      shift
-      cmd_refresh "$@"
-      ;;
-    status)
-      shift
-      cmd_status "$@"
-      ;;
-    dump)
-      shift
-      cmd_dump "$@"
-      ;;
-    -h|--help|help)
-      usage
-      ;;
-    *)
-      err "unknown command: $1"
-      ;;
+  register)
+    shift
+    cmd_register "$@"
+    ;;
+  deregister)
+    shift
+    cmd_deregister "$@"
+    ;;
+  refresh)
+    shift
+    cmd_refresh "$@"
+    ;;
+  status)
+    shift
+    cmd_status "$@"
+    ;;
+  dump)
+    shift
+    cmd_dump "$@"
+    ;;
+  -h | --help | help)
+    usage
+    ;;
+  *)
+    err "unknown command: $1"
+    ;;
   esac
 }
 

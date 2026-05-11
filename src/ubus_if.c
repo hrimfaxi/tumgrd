@@ -79,6 +79,10 @@ static void add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
   if (n->has_memlimit) {
     blobmsg_add_u32(b, "memlimit", (uint32_t) n->memlimit);
   }
+
+  if (n->xor_key[0]) {
+    blobmsg_add_string(b, "xor", n->xor_key);
+  }
 }
 
 /*
