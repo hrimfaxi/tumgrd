@@ -1,0 +1,28 @@
+{
+  "admin/services/tumgrd": {
+    "title": "Tumgrd",
+    "order": 60,
+    "action": {
+      "type": "firstchild"
+    },
+    "depends": {
+      "acl": [ "luci-app-tumgrd" ]
+    }
+  },
+  "admin/services/tumgrd/nodes": {
+    "title": "Nodes",
+    "order": 10,
+    "action": {
+      "type": "view",
+      "path": "tumgrd/nodes"
+    }
+  },
+  "admin/services/tumgrd/config": {
+    "title": "Configuration",
+    "order": 20,
+    "action": {
+      "type": "view",
+      "path": "tumgrd/config"
+    }
+  }
+}

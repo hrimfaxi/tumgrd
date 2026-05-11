@@ -1,0 +1,29 @@
+{
+  "luci-app-tumgrd": {
+    "description": "Grant access to tumgrd RPC interface",
+    "read": {
+      "ubus": {
+        "tumgrd": [
+          "status",
+          "dump"
+        ]
+      },
+      "uci": [
+        "tumgrd"
+      ]
+    },
+    "write": {
+      "ubus": {
+        "tumgrd": [
+          "register",
+          "deregister",
+          "refresh",
+          "refresh_all"
+        ]
+      },
+      "uci": [
+        "tumgrd"
+      ]
+    }
+  }
+}
