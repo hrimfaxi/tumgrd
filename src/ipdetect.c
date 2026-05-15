@@ -192,14 +192,14 @@ static int exec_capture(char *const argv[], char *out, size_t out_len) {
  * 这个地址是能出网的全球单播地址，而非 fe80::/10 等链路本地地址
  */
 static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, size_t out_len) {
-  struct addrinfo         hints, *res, *rp;
+  struct addrinfo         hints, *res = NULL, *rp = NULL;
   int                     sockfd = -1;
   int                     err;
   struct sockaddr_storage local_addr;
   socklen_t               addr_len = sizeof(local_addr);
   void                   *addr_ptr = NULL;
   const char             *addr_str = NULL;
-  char                    port_str[6];
+  char                    port_str[16];
   int                     gai_ret;
 
   if (!out || out_len == 0) {
@@ -301,7 +301,7 @@ static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, siz
   }
 
   /* 过滤掉链路本地地址（理论上不应该出现，但做个保险） */
-  if (strncasecmp(out, "fe80:", 5) == 0 || strncasecmp(out, "fe80::", 6) == 0) {
+  if (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr)) {
     log_error("[ipdetect] got link-local address %s, not a WAN address", out);
     err = -1;
     goto err_cleanup;
