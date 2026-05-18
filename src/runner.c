@@ -233,7 +233,7 @@ static int run_tuctl_script(const struct tumgrd_node *node, const char *script, 
   }
 
   argv[argc++] = "max-retries";
-  argv[argc++] = "5";
+  argv[argc++] = "1";
   argv[argc++] = "psk";
   argv[argc++] = (char *) node->psk;
   argv[argc++] = "server";
