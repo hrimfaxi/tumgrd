@@ -15,22 +15,34 @@
 #include <string.h>
 
 static int normalize_ip_version(const char *in, char *out, size_t out_len) {
-  if (!in || in[0] == '\0') {
-    snprintf(out, out_len, "%s", "");
+  if (!out || out_len == 0)
+    return -1;
+  out[0] = '\0';
+
+  if (!in || in[0] == '\0')
     return 0;
-  }
 
   if (streqcase(in, "4") || streqcase(in, "-4") || streqcase(in, "ipv4")) {
-    snprintf(out, out_len, "%s", "ipv4");
+    copy_string(out, out_len, "ipv4");
     return 0;
   }
 
   if (streqcase(in, "6") || streqcase(in, "-6") || streqcase(in, "ipv6")) {
-    snprintf(out, out_len, "%s", "ipv6");
+    copy_string(out, out_len, "ipv6");
     return 0;
   }
 
-  return -1; // 非法值
+  return -1;
+}
+
+static int get_normalized_ip_version(struct blob_attr *attr, char *out, size_t out_len, const char *tag) {
+  const char *raw = attr ? blobmsg_get_string(attr) : "";
+
+  if (normalize_ip_version(raw, out, out_len) != 0) {
+    log_error("[%s] invalid ip_version: %s", tag ? tag : "ubus", raw);
+    return -1;
+  }
+  return 0;
 }
 
 #define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
@@ -190,11 +202,8 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   const char *server_host = blobmsg_get_string(tb[REG_SERVER_HOST]);
   int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
 
-  char        ip_version[16] = "";
-  const char *ip_version_raw = tb[REG_IP_VERSION] ? blobmsg_get_string(tb[REG_IP_VERSION]) : "";
-
-  if (normalize_ip_version(ip_version_raw, ip_version, sizeof(ip_version)) != 0) {
-    log_error("[register] invalid ip_version: %s", ip_version_raw);
+  char ip_version[16];
+  if (get_normalized_ip_version(tb[REG_IP_VERSION], ip_version, sizeof(ip_version), "register") != 0) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
@@ -314,12 +323,17 @@ static int handle_deregister(struct ubus_context *ctx, struct ubus_object *obj, 
 
   blobmsg_parse(dereg_policy, __DEREG_MAX, tb, blob_data(msg), blob_len(msg));
 
-  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST] || !tb[DEREG_SERVER_PORT] || !tb[DEREG_IP_VERSION]) {
+  if (!tb[DEREG_UID] || !tb[DEREG_SERVER_HOST] || !tb[DEREG_SERVER_PORT]) {
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
+
+  char ip_version[16];
+  if (get_normalized_ip_version(tb[DEREG_IP_VERSION], ip_version, sizeof(ip_version), "deregister") != 0) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
   resolve_rc = resolve_node(&tctx->db, blobmsg_get_string(tb[DEREG_UID]), blobmsg_get_string(tb[DEREG_SERVER_HOST]),
-                            (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), blobmsg_get_string(tb[DEREG_IP_VERSION]), &node);
+                            (int) blobmsg_get_u32(tb[DEREG_SERVER_PORT]), ip_version, &node);
 
   if (resolve_rc == 1) {
     reply_simple(ctx, req, "not_found", "node not found");
@@ -402,7 +416,13 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     return UBUS_STATUS_OK;
   }
 
-  if (!tb[REF_UID] || !tb[REF_SERVER_HOST] || !tb[REF_SERVER_PORT] || !tb[REF_IP_VERSION]) {
+  if (!tb[REF_UID] || !tb[REF_SERVER_HOST] || !tb[REF_SERVER_PORT]) {
+    blob_buf_free(&b);
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
+
+  char ip_version[16];
+  if (get_normalized_ip_version(tb[REF_IP_VERSION], ip_version, sizeof(ip_version), "refresh") != 0) {
     blob_buf_free(&b);
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
@@ -412,7 +432,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     int                resolve_rc;
 
     resolve_rc = resolve_node(&tctx->db, blobmsg_get_string(tb[REF_UID]), blobmsg_get_string(tb[REF_SERVER_HOST]),
-                              (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), blobmsg_get_string(tb[REF_IP_VERSION]), &node);
+                              (int) blobmsg_get_u32(tb[REF_SERVER_PORT]), ip_version, &node);
 
     if (resolve_rc == 1) {
       blobmsg_add_string(&b, "status", "not_found");
