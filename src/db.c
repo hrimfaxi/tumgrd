@@ -145,7 +145,7 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
                            " client_port INTEGER NOT NULL,"
                            " memlimit INTEGER,"
                            " ip_check_url TEXT DEFAULT 'ip.3322.net',"
-                           " ip_version TEXT,"
+                           " ip_version TEXT NOT NULL DEFAULT '',"
                            " current_ip TEXT,"
                            " last_updated INTEGER,"
                            " status TEXT DEFAULT 'active',"
@@ -243,7 +243,8 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   SQLITE_TRY(sqlite3_bind_int(stmt, 8, n.client_port), conn, "bind(client_port)");
   SQLITE_TRY(n.has_memlimit ? sqlite3_bind_int(stmt, 9, n.memlimit) : sqlite3_bind_null(stmt, 9), conn, "bind(memlimit)");
   SQLITE_TRY(bind_text_or_null(stmt, 10, nonempty_or_null(n.ip_check_url)), conn, "bind(ip_check_url)");
-  SQLITE_TRY(bind_text_or_null(stmt, 11, nonempty_or_null(n.ip_version)), conn, "bind(ip_version)");
+  // ip_version 不允许 NULL，空字符串表示自动判断
+  SQLITE_TRY(bind_required_text(stmt, 11, n.ip_version), conn, "bind(ip_version)");
   SQLITE_TRY(bind_text_or_null(stmt, 12, nonempty_or_null(n.current_ip)), conn, "bind(current_ip)");
   SQLITE_TRY(sqlite3_bind_int64(stmt, 13, (sqlite3_int64) n.last_updated), conn, "bind(last_updated)");
   SQLITE_TRY(bind_text_or_null(stmt, 14, nonempty_or_null(n.status)), conn, "bind(status)");
