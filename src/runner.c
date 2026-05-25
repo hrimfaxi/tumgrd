@@ -82,13 +82,27 @@ static int read_all_fd(int fd, char *buf, size_t buf_len) {
 }
 
 static void log_argv(const char *tag, char *const argv[]) {
-  int i;
+  char buf[2048] = {0};
+  int  off       = 0;
+  int  i;
+  int  sensitive_next = 0;
 
-  fprintf(stderr, "[runner] %s exec:", tag ? tag : "cmd");
-  for (i = 0; argv && argv[i]; i++) {
-    fprintf(stderr, " %s", argv[i]);
+  if (!argv)
+    return;
+
+  off = snprintf(buf, sizeof(buf), "[runner] %s exec:", tag ? tag : "cmd");
+  for (i = 0; argv[i] && off < (int) sizeof(buf) - 32; i++) {
+    if (sensitive_next) {
+      off += snprintf(buf + off, sizeof(buf) - off, " ****");
+      sensitive_next = 0;
+    } else {
+      off += snprintf(buf + off, sizeof(buf) - off, " %s", argv[i]);
+    }
+    if (strcasecmp(argv[i], "psk") == 0 || strcasecmp(argv[i], "xor") == 0) {
+      sensitive_next = 1;
+    }
   }
-  fprintf(stderr, "\n");
+  log_debug("%s", buf);
 }
 
 static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_memlimit, int memlimit, char *stdout_buf,
