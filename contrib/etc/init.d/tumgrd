@@ -8,7 +8,7 @@ PROG=/usr/sbin/tumgrd
 CONFIGNAME="tumgrd"
 
 start_service() {
-	local enabled database interval client_bin log_level enable_xor
+	local enabled database interval log_level enable_xor
 
 	config_load "$CONFIGNAME"
 	config_get enabled main enabled '1'
@@ -16,7 +16,6 @@ start_service() {
 
 	config_get database main database '/lib/tumgrd/tumgrd.db'
 	config_get interval main interval '300'
-	config_get client_bin main client_bin '/usr/bin/tuctl_client'
 	config_get log_level main log_level 'info'
 	config_get enable_xor main enable_xor '0'
 
@@ -24,7 +23,7 @@ start_service() {
 	if [ "$enable_xor" = "1" ]; then
 		args="$args --enable-xor"
 	fi
-	args="$args --client-bin $client_bin --log-level $log_level"
+	args="$args --log-level $log_level"
 
 	procd_open_instance
 	procd_set_param command "$PROG" $args

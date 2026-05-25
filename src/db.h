@@ -38,7 +38,6 @@ struct tumgrd_db {
 struct tumgrd_config {
   const char *db_path;
   const char *socket_path;
-  const char *client_bin;
   const char *log_level;
   uint32_t    interval_sec;
   bool        enable_xor;

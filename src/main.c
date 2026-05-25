@@ -19,7 +19,6 @@
 
 #define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
 #define DEFAULT_SOCKET_PATH               NULL
-#define DEFAULT_CLIENT_BIN                "tuctl_client"
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
 
@@ -27,7 +26,6 @@ static void config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->db_path      = TUMGRD_DB_PATH;
   cfg->socket_path  = DEFAULT_SOCKET_PATH;
-  cfg->client_bin   = DEFAULT_CLIENT_BIN;
   cfg->log_level    = DEFAULT_LOG_LEVEL;
   cfg->interval_sec = DEFAULT_INTERVAL;
   cfg->enable_xor   = false;
@@ -41,12 +39,11 @@ static void usage(FILE *out, const char *prog) {
           "  -d, --database PATH      sqlite database path (default: %s)\n"
           "  -i, --interval SEC       monitor interval seconds (10-3600) (default: %d)\n"
           "  -s, --socket PATH        unix socket path (default: %s)\n"
-          "      --client-bin PATH    path to tuctl_client binary (default: %s)\n"
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "      --enable-xor         enable automatic XOR key generation for new nodes\n"
           "      --disable-xor        disable automatic XOR key generation (default)\n"
           "  -h, --help               show this help\n",
-          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_CLIENT_BIN,
+          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"),
           DEFAULT_LOG_LEVEL);
 }
 
@@ -57,11 +54,10 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
   static const struct option long_opts[] = {{"database", required_argument, NULL, 'd'},
                                             {"interval", required_argument, NULL, 'i'},
                                             {"socket", required_argument, NULL, 's'},
-                                            {"client-bin", required_argument, NULL, 1},
-                                            {"log-level", required_argument, NULL, 2},
+                                            {"log-level", required_argument, NULL, 1},
                                             {"help", no_argument, NULL, 'h'},
-                                            {"enable-xor", no_argument, NULL, 3},
-                                            {"disable-xor", no_argument, NULL, 4},
+                                            {"enable-xor", no_argument, NULL, 2},
+                                            {"disable-xor", no_argument, NULL, 3},
                                             {0, 0, 0, 0}};
 
   while ((c = getopt_long(argc, argv, "d:i:s:h", long_opts, NULL)) != -1) {
@@ -76,15 +72,12 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->socket_path = optarg;
       break;
     case 1:
-      cfg->client_bin = optarg;
-      break;
-    case 2:
       cfg->log_level = optarg;
       break;
-    case 3:
+    case 2:
       cfg->enable_xor = true;
       break;
-    case 4:
+    case 3:
       cfg->enable_xor = false;
       break;
     case 'h':
@@ -167,10 +160,10 @@ int main(int argc, char **argv) {
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s client_bin=%s%s",
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s",
            nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
            ctx.cfg.interval_sec, nonempty_or_default(ctx.cfg.log_level, "(null)"),
-           nonempty_or_default(ctx.cfg.client_bin, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "");
+           ctx.cfg.enable_xor ? " xor-enabled" : "");
 
   uloop_run();
 
