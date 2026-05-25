@@ -163,12 +163,17 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
 
   blobmsg_parse(reg_policy, __REG_MAX, tb, blob_data(msg), blob_len(msg));
 
-  if (!tb[REG_UID] || !tb[REG_SERVER_HOST] || !tb[REG_SERVER_PORT] || !tb[REG_CLIENT_PORT] || !tb[REG_PSK]) {
+  if (!tb[REG_UID] || !tb[REG_SERVER_HOST] || !tb[REG_SERVER_PORT] || !tb[REG_CLIENT_PORT] || !tb[REG_PSK] ||
+      !tb[REG_IP_VERSION]) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
-  get_rc = tumgrd_db_get_node(&tctx->db, blobmsg_get_string(tb[REG_SERVER_HOST]), (int) blobmsg_get_u32(tb[REG_SERVER_PORT]),
-                              blobmsg_get_string(tb[REG_UID]), blobmsg_get_string(tb[REG_IP_VERSION]), &old_node);
+  const char *uid         = blobmsg_get_string(tb[REG_UID]);
+  const char *server_host = blobmsg_get_string(tb[REG_SERVER_HOST]);
+  int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
+  const char *ip_version  = blobmsg_get_string(tb[REG_IP_VERSION]);
+
+  get_rc = tumgrd_db_get_node(&tctx->db, server_host, server_port, uid, ip_version, &old_node);
 
   if (get_rc == 0) {
     node   = old_node;
@@ -179,9 +184,9 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
 
-  snprintf(node.uid, sizeof(node.uid), "%s", blobmsg_get_string(tb[REG_UID]));
-  snprintf(node.server_host, sizeof(node.server_host), "%s", blobmsg_get_string(tb[REG_SERVER_HOST]));
-  node.server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
+  snprintf(node.uid, sizeof(node.uid), "%s", uid);
+  snprintf(node.server_host, sizeof(node.server_host), "%s", server_host);
+  node.server_port = server_port;
   node.client_port = (int) blobmsg_get_u32(tb[REG_CLIENT_PORT]);
   snprintf(node.psk, sizeof(node.psk), "%s", blobmsg_get_string(tb[REG_PSK]));
 
@@ -214,9 +219,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     snprintf(node.ip_check_url, sizeof(node.ip_check_url), "%s", blobmsg_get_string(tb[REG_IP_CHECK_URL]));
   }
 
-  if (tb[REG_IP_VERSION]) {
-    snprintf(node.ip_version, sizeof(node.ip_version), "%s", blobmsg_get_string(tb[REG_IP_VERSION]));
-  }
+  snprintf(node.ip_version, sizeof(node.ip_version), "%s", ip_version);
 
   if (tb[REG_XOR_KEY]) {
     log_info("Override XOR key for node %s", node.uid);
