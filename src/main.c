@@ -43,8 +43,7 @@ static void usage(FILE *out, const char *prog) {
           "      --enable-xor         enable automatic XOR key generation for new nodes\n"
           "      --disable-xor        disable automatic XOR key generation (default)\n"
           "  -h, --help               show this help\n",
-          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"),
-          DEFAULT_LOG_LEVEL);
+          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL);
 }
 
 static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
@@ -160,10 +159,9 @@ int main(int argc, char **argv) {
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s",
-           nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
-           ctx.cfg.interval_sec, nonempty_or_default(ctx.cfg.log_level, "(null)"),
-           ctx.cfg.enable_xor ? " xor-enabled" : "");
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s", nonempty_or_default(ctx.cfg.db_path, "(null)"),
+           nonempty_or_default(ctx.cfg.socket_path, "(default)"), ctx.cfg.interval_sec,
+           nonempty_or_default(ctx.cfg.log_level, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "");
 
   uloop_run();
 
