@@ -14,6 +14,25 @@
 #include <stdio.h>
 #include <string.h>
 
+static int normalize_ip_version(const char *in, char *out, size_t out_len) {
+  if (!in || in[0] == '\0') {
+    snprintf(out, out_len, "%s", "");
+    return 0;
+  }
+
+  if (streqcase(in, "4") || streqcase(in, "-4") || streqcase(in, "ipv4")) {
+    snprintf(out, out_len, "%s", "ipv4");
+    return 0;
+  }
+
+  if (streqcase(in, "6") || streqcase(in, "-6") || streqcase(in, "ipv6")) {
+    snprintf(out, out_len, "%s", "ipv6");
+    return 0;
+  }
+
+  return -1; // 非法值
+}
+
 #define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
 
 static bool blobmsg_get_bool_default(struct blob_attr *attr, bool defval) {
@@ -170,7 +189,14 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   const char *uid         = blobmsg_get_string(tb[REG_UID]);
   const char *server_host = blobmsg_get_string(tb[REG_SERVER_HOST]);
   int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
-  const char *ip_version  = tb[REG_IP_VERSION] ? blobmsg_get_string(tb[REG_IP_VERSION]) : "";
+
+  char        ip_version[16] = "";
+  const char *ip_version_raw = tb[REG_IP_VERSION] ? blobmsg_get_string(tb[REG_IP_VERSION]) : "";
+
+  if (normalize_ip_version(ip_version_raw, ip_version, sizeof(ip_version)) != 0) {
+    log_error("[register] invalid ip_version: %s", ip_version_raw);
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
 
   get_rc = tumgrd_db_get_node(&tctx->db, server_host, server_port, uid, ip_version, &old_node);
 
