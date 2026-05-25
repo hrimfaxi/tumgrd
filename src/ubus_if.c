@@ -237,6 +237,18 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    */
   err = tumgrd_reconcile_one(&tctx->db, &node, true);
 
+  // 如果 reconcile 成功，重新从 DB 读取最新节点状态
+  if (err == 0) {
+    struct tumgrd_node updated_node = {};
+
+    int get_rc = tumgrd_db_get_node(&tctx->db, node.server_host, node.server_port, node.uid, node.ip_version, &updated_node);
+    if (get_rc == 0) {
+      node = updated_node; // 覆盖为最新数据
+    } else {
+      log_warn("[register] reconcile succeeded but failed to fetch updated node: rc=%d", get_rc);
+    }
+  }
+
   blob_buf_init(&b, 0);
   blobmsg_add_string(&b, "status", err == 0 ? "ok" : "stored_but_apply_failed");
   blobmsg_add_string(&b, "action", action);
