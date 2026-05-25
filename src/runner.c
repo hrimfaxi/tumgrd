@@ -44,11 +44,11 @@ static const char *ip_version_flag(const char *ip_version) {
     return NULL;
   }
 
-  if (streq(ip_version, "4") || streq(ip_version, "ipv4") || streq(ip_version, "-4")) {
+  if (streqcase(ip_version, "4") || streqcase(ip_version, "ipv4") || streqcase(ip_version, "-4")) {
     return "-4";
   }
 
-  if (streq(ip_version, "6") || streq(ip_version, "ipv6") || streq(ip_version, "-6")) {
+  if (streqcase(ip_version, "6") || streqcase(ip_version, "ipv6") || streqcase(ip_version, "-6")) {
     return "-6";
   }
 
