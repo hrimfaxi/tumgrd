@@ -163,15 +163,14 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
 
   blobmsg_parse(reg_policy, __REG_MAX, tb, blob_data(msg), blob_len(msg));
 
-  if (!tb[REG_UID] || !tb[REG_SERVER_HOST] || !tb[REG_SERVER_PORT] || !tb[REG_CLIENT_PORT] || !tb[REG_PSK] ||
-      !tb[REG_IP_VERSION]) {
+  if (!tb[REG_UID] || !tb[REG_SERVER_HOST] || !tb[REG_SERVER_PORT] || !tb[REG_CLIENT_PORT] || !tb[REG_PSK]) {
     return UBUS_STATUS_INVALID_ARGUMENT;
   }
 
   const char *uid         = blobmsg_get_string(tb[REG_UID]);
   const char *server_host = blobmsg_get_string(tb[REG_SERVER_HOST]);
   int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
-  const char *ip_version  = blobmsg_get_string(tb[REG_IP_VERSION]);
+  const char *ip_version  = tb[REG_IP_VERSION] ? blobmsg_get_string(tb[REG_IP_VERSION]) : "";
 
   get_rc = tumgrd_db_get_node(&tctx->db, server_host, server_port, uid, ip_version, &old_node);
 
