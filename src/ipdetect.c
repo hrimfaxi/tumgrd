@@ -399,7 +399,7 @@ static int http_get_with_mark(const char *host, int port, const char *path, char
   int n_req = snprintf(request, sizeof(request),
                        "GET %s HTTP/1.1\r\n"
                        "Host: %s\r\n"
-                       "User-Agent: curl/8.20.0\r\n"
+                       "User-Agent: Wget/1.21.4\r\n"
                        "Connection: close\r\n"
                        "\r\n",
                        path, host);
