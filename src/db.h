@@ -41,6 +41,7 @@ struct tumgrd_config {
   const char *log_level;
   uint32_t    interval_sec;
   bool        enable_xor;
+  int         fwmark;
 };
 
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);

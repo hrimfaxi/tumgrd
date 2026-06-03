@@ -1,7 +1,7 @@
 #include "db.h"
 #include "helper.h"
+#include "ipdetect.h"
 #include "log.h"
-#include "reconcile.h"
 #include "try.h"
 #include "tumgrd.h"
 #include "ubus_if.h"
@@ -29,6 +29,7 @@ static void config_init(struct tumgrd_config *cfg) {
   cfg->log_level    = DEFAULT_LOG_LEVEL;
   cfg->interval_sec = DEFAULT_INTERVAL;
   cfg->enable_xor   = false;
+  cfg->fwmark       = TUMGRD_IPDETECT_FWMARK;
 }
 
 static void usage(FILE *out, const char *prog) {
@@ -42,8 +43,10 @@ static void usage(FILE *out, const char *prog) {
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "      --enable-xor         enable automatic XOR key generation for new nodes\n"
           "      --disable-xor        disable automatic XOR key generation (default)\n"
+          "      --fwmark NUM         SO_MARK value for IP detection (0-255, default: %d)\n"
           "  -h, --help               show this help\n",
-          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL);
+          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL,
+          TUMGRD_IPDETECT_FWMARK);
 }
 
 static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
@@ -57,6 +60,7 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
                                             {"help", no_argument, NULL, 'h'},
                                             {"enable-xor", no_argument, NULL, 2},
                                             {"disable-xor", no_argument, NULL, 3},
+                                            {"fwmark", required_argument, NULL, 4},
                                             {0, 0, 0, 0}};
 
   while ((c = getopt_long(argc, argv, "d:i:s:h", long_opts, NULL)) != -1) {
@@ -79,6 +83,15 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
     case 3:
       cfg->enable_xor = false;
       break;
+    case 4: {
+      int val = atoi(optarg);
+      if (val < 0 || val > 255) {
+        log_error("invalid fwmark: %s (must be 0-255)", optarg);
+        err = -1;
+        goto err_cleanup;
+      }
+      cfg->fwmark = val;
+    } break;
     case 'h':
       usage(stdout, argv[0]);
       err = 1;
@@ -150,6 +163,7 @@ int main(int argc, char **argv) {
        nonempty_or_default(ctx.cfg.log_level, "(null)"));
 
   try2(uloop_init(), "[main] uloop_init failed");
+  set_ipdetect_fwmark(ctx.cfg.fwmark);
 
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);

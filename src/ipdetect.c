@@ -17,6 +17,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* 全局 SO_MARK 值，默认 2，由 main 通过 set_ipdetect_fwmark() 设置 */
+static int g_ipdetect_fwmark = TUMGRD_IPDETECT_FWMARK;
+
+void set_ipdetect_fwmark(int mark) {
+  g_ipdetect_fwmark = mark;
+}
+
 static int is_ipv4(const char *s) {
   struct in_addr addr4;
   return s && inet_pton(AF_INET, s, &addr4) == 1;
@@ -160,6 +167,11 @@ static int detect_ipv6_wan_by_connect(const char *host, int port, char *out, siz
     sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
     if (sockfd < 0)
       continue;
+
+    /* 打上 fwmark 避免被透明代理劫持 */
+    if (setsockopt(sockfd, SOL_SOCKET, SO_MARK, &g_ipdetect_fwmark, sizeof(g_ipdetect_fwmark)) < 0) {
+      log_error("[ipdetect] SO_MARK failed (IPv6 connect): %s", strerror(errno));
+    }
 
     // ---- 非阻塞 connect 实现超时 ----
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -350,7 +362,6 @@ static int http_get_with_mark(const char *host, int port, const char *path, char
   int             ret = -1, sock = -1;
   struct addrinfo hints, *res, *rp;
   char            service[8];
-  int             mark = TUMGRD_IPDETECT_FWMARK;
   char            request[512];
   char            response[4096] = {0};
   size_t          total          = 0;
@@ -376,7 +387,7 @@ static int http_get_with_mark(const char *host, int port, const char *path, char
     if (sock < 0)
       continue;
 
-    if (setsockopt(sock, SOL_SOCKET, SO_MARK, &mark, sizeof(mark)) < 0) {
+    if (setsockopt(sock, SOL_SOCKET, SO_MARK, &g_ipdetect_fwmark, sizeof(g_ipdetect_fwmark)) < 0) {
       log_error("[ipdetect] SO_MARK failed: %s (continuing without mark)", strerror(errno));
     }
 
