@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,80 +111,6 @@ static int extract_ip(const char *text, const char *ip_version, char *out, size_
   }
 
   return -1;
-}
-
-static void build_url(const char *url, char *buf, size_t buf_len) {
-  if (!buf || buf_len == 0) {
-    return;
-  }
-
-  if (!url || url[0] == '\0') {
-    url = TUMGRD_DEFAULT_IP_CHECK_URL;
-  }
-
-  if (strstr(url, "://")) {
-    copy_string(buf, buf_len, url);
-  } else {
-    snprintf(buf, buf_len, "http://%s", url);
-  }
-}
-
-static int exec_capture(char *const argv[], char *out, size_t out_len) {
-  int     pipefd[2];
-  pid_t   pid;
-  ssize_t nread;
-  size_t  used = 0;
-  int     status;
-
-  if (!argv || !argv[0] || !out || out_len == 0) {
-    return -1;
-  }
-
-  out[0] = '\0';
-
-  if (pipe(pipefd) != 0) {
-    return -1;
-  }
-
-  pid = fork();
-  if (pid < 0) {
-    close(pipefd[0]);
-    close(pipefd[1]);
-    return -1;
-  }
-
-  if (pid == 0) {
-    close(pipefd[0]);
-
-    dup2(pipefd[1], STDOUT_FILENO);
-    dup2(pipefd[1], STDERR_FILENO);
-    close(pipefd[1]);
-
-    execvp(argv[0], argv);
-    _exit(127);
-  }
-
-  close(pipefd[1]);
-
-  while ((nread = read(pipefd[0], out + used, out_len - 1 - used)) > 0) {
-    used += (size_t) nread;
-    if (used >= out_len - 1) {
-      break;
-    }
-  }
-
-  out[used] = '\0';
-  close(pipefd[0]);
-
-  if (waitpid(pid, &status, 0) < 0) {
-    return -1;
-  }
-
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    return -1;
-  }
-
-  return 0;
 }
 
 /*
@@ -321,16 +248,266 @@ err_cleanup:
   return err;
 }
 
+/**
+ * 解析 URL，提取 scheme、host、port、path。
+ * 仅支持 http 协议，遇到 https 或其他 scheme 返回 -1。
+ * 支持 IPv6 字面量 [addr] 格式。
+ * 若 URL 为空，则返回 -1。
+ */
+static int parse_url_host_path(const char *url, char *host, size_t host_size, int *port, char *path, size_t path_size) {
+  const char *p = url;
+  const char *host_start, *host_end;
+  const char *port_start = NULL;
+  const char *path_start;
+  size_t      host_len, path_len;
+  long        port_num;
+
+  if (!url || url[0] == '\0')
+    return -1;
+
+  /* 检查 scheme */
+  if (strncmp(p, "http://", 7) == 0) {
+    p += 7;
+  } else if (strncmp(p, "https://", 8) == 0) {
+    log_error("[ipdetect] HTTPS URL not supported: %s", url);
+    return -1;
+  }
+
+  /* 处理 IPv6 字面量 */
+  if (*p == '[') {
+    host_start              = p + 1;
+    const char *bracket_end = strchr(host_start, ']');
+    if (!bracket_end) {
+      log_error("[ipdetect] missing ']' in IPv6 URL: %s", url);
+      return -1;
+    }
+    host_end = bracket_end;
+    p        = bracket_end + 1;
+  } else {
+    host_start = p;
+    host_end   = host_start;
+    while (*host_end != '\0' && *host_end != '/' && *host_end != ':') {
+      host_end++;
+    }
+    p = host_end;
+  }
+
+  host_len = (size_t) (host_end - host_start);
+  if (host_len >= host_size) {
+    log_error("[ipdetect] host too long in URL: %s", url);
+    return -1;
+  }
+  memcpy(host, host_start, host_len);
+  host[host_len] = '\0';
+
+  /* 解析端口 */
+  if (*p == ':') {
+    p++;
+    port_start = p;
+    while (isdigit((unsigned char) *p))
+      p++;
+    if (p == port_start) {
+      log_error("[ipdetect] invalid port in URL: %s", url);
+      return -1;
+    }
+    port_num = strtol(port_start, NULL, 10);
+    if (port_num < 1 || port_num > 65535) {
+      log_error("[ipdetect] port out of range in URL: %s", url);
+      return -1;
+    }
+    *port = (int) port_num;
+  } else {
+    *port = TUMGRD_DEFAULT_IP_CHECK_PORT;
+  }
+
+  /* 解析 path */
+  if (*p == '/') {
+    path_start = p;
+  } else if (*p == '\0') {
+    path_start = "/";
+  } else {
+    log_error("[ipdetect] unexpected char after host:port in URL: %s", url);
+    return -1;
+  }
+
+  path_len = strlen(path_start);
+  if (path_len >= path_size) {
+    log_error("[ipdetect] path too long in URL: %s", url);
+    return -1;
+  }
+  strcpy(path, path_start);
+
+  return 0;
+}
+
+/**
+ * 内部 HTTP GET 请求，打上 SO_MARK=2 绕过 xtp-rs。
+ * 只支持 HTTP/1.0，端口由参数指定。
+ * 会遍历 getaddrinfo 结果重试连接。
+ * 读取响应直到 EOF 或缓冲区满，自动跳过 HTTP 头部，只保留 body。
+ */
+static int http_get_with_mark(const char *host, int port, const char *path, char *out, size_t out_len) {
+  int             ret = -1, sock = -1;
+  struct addrinfo hints, *res, *rp;
+  char            service[8];
+  int             mark = TUMGRD_IPDETECT_FWMARK;
+  char            request[512];
+  char            response[4096] = {0};
+  size_t          total          = 0;
+  ssize_t         n;
+  size_t          req_len, sent;
+
+  if (!host || !path || !out || out_len == 0)
+    return -1;
+
+  snprintf(service, sizeof(service), "%d", port);
+
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family   = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if (getaddrinfo(host, service, &hints, &res) != 0) {
+    log_error("[ipdetect] getaddrinfo failed for %s:%d", host, port);
+    return -1;
+  }
+
+  for (rp = res; rp != NULL; rp = rp->ai_next) {
+    sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+    if (sock < 0)
+      continue;
+
+    if (setsockopt(sock, SOL_SOCKET, SO_MARK, &mark, sizeof(mark)) < 0) {
+      log_error("[ipdetect] SO_MARK failed: %s (continuing without mark)", strerror(errno));
+    }
+
+    if (connect(sock, rp->ai_addr, rp->ai_addrlen) == 0)
+      break;
+
+    close(sock);
+    sock = -1;
+  }
+
+  if (sock < 0) {
+    log_error("[ipdetect] connect to %s:%d failed", host, port);
+    freeaddrinfo(res);
+    return -1;
+  }
+  freeaddrinfo(res);
+  res = NULL;
+
+  /* 构造 HTTP 请求 */
+  int n_req = snprintf(request, sizeof(request),
+                       "GET %s HTTP/1.1\r\n"
+                       "Host: %s\r\n"
+                       "User-Agent: curl/8.20.0\r\n"
+                       "Connection: close\r\n"
+                       "\r\n",
+                       path, host);
+  if (n_req < 0 || (size_t) n_req >= sizeof(request)) {
+    log_error("[ipdetect] HTTP request too long for %s:%d%s", host, port, path);
+    goto out;
+  }
+  req_len = (size_t) n_req;
+
+  /* 确保请求完整发送 */
+  sent = 0;
+  while (sent < req_len) {
+    ssize_t m = send(sock, request + sent, req_len - sent, 0);
+    if (m < 0) {
+      if (errno == EINTR)
+        continue;
+      log_error("[ipdetect] send failed: %s", strerror(errno));
+      goto out;
+    }
+    if (m == 0) {
+      log_error("[ipdetect] send returned 0");
+      goto out;
+    }
+    sent += (size_t) m;
+  }
+
+  /* 循环读取响应 */
+  while (total < sizeof(response) - 1) {
+    n = recv(sock, response + total, sizeof(response) - 1 - total, 0);
+    if (n < 0) {
+      if (errno == EINTR)
+        continue;
+      log_error("[ipdetect] recv failed: %s", strerror(errno));
+      goto out;
+    }
+    if (n == 0)
+      break;
+    total += n;
+  }
+  response[total] = '\0';
+  if (total == sizeof(response) - 1) {
+    log_error("[ipdetect] response truncated (buffer full)");
+  }
+
+  /* 检查状态码 */
+  if (strncmp(response, "HTTP/", 5) != 0) {
+    log_error("[ipdetect] invalid HTTP response");
+    goto out;
+  }
+  const char *status_line = response + 5;
+  while (*status_line && *status_line != ' ')
+    status_line++;
+  while (*status_line == ' ')
+    status_line++;
+  if (strncmp(status_line, "200", 3) != 0) {
+    log_error("[ipdetect] HTTP status not 200");
+    goto out;
+  }
+
+  /* 寻找 header 结束 */
+  char *body_start = strstr(response, "\r\n\r\n");
+  if (!body_start) {
+    body_start = strstr(response, "\n\n");
+    if (body_start)
+      body_start += 2;
+    else {
+      log_error("[ipdetect] no header end found");
+      goto out;
+    }
+  } else {
+    body_start += 4;
+  }
+
+  size_t body_len = total - (body_start - response);
+  if (body_len == 0) {
+    log_error("[ipdetect] empty body");
+    goto out;
+  }
+  if (body_len >= out_len)
+    body_len = out_len - 1;
+  memcpy(out, body_start, body_len);
+  out[body_len] = '\0';
+  ret           = 0;
+
+out:
+  if (sock >= 0)
+    close(sock);
+  return ret;
+}
+
 int detect_public_ip(const char *url, const char *ip_version, char *out, size_t out_len) {
-  char final_url[256];
-  int  err;
+  int err;
 
   if (!out || out_len == 0) {
     return -1;
   }
 
   out[0] = '\0';
-  build_url(url, final_url, sizeof(final_url));
+
+  /* 解析 URL，获取 host、port、path */
+  char host[128] = TUMGRD_DEFAULT_IP_CHECK_HOST;
+  int  port      = TUMGRD_DEFAULT_IP_CHECK_PORT;
+  char path[256] = TUMGRD_DEFAULT_IP_CHECK_PATH;
+
+  if (url && url[0] != '\0') {
+    if (parse_url_host_path(url, host, sizeof(host), &port, path, sizeof(path)) != 0)
+      return -1; /* URL 非法则直接失败，不静默回退 */
+  }
 
   /*
    * 如果是 IPv6 请求且没有指定外部检测 URL，
@@ -345,28 +522,16 @@ int detect_public_ip(const char *url, const char *ip_version, char *out, size_t 
     log_info("[ipdetect] IPv6 connect method failed, fallback to HTTP check");
   }
 
+  /* 使用内部 HTTP 请求 */
   {
     char buf[512];
-
-    const char *bins[] = {
-      "uclient-fetch",
-      "wget",
-    };
-
-    char *argv[] = {NULL, "-qO-", (char *) final_url, NULL};
-
-    for (int i = 0; i < 2; i++) {
-      buf[0]  = '\0';
-      argv[0] = (char *) bins[i];
-
-      err = exec_capture(argv, buf, sizeof(buf));
-      if (err == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
-        return 0;
-      }
+    err = http_get_with_mark(host, port, path, buf, sizeof(buf));
+    if (err == 0 && extract_ip(buf, ip_version, out, out_len) == 0) {
+      return 0;
     }
   }
 
-  log_error("[ipdetect] failed url=%s ip_version=%s", final_url, ip_version ? ip_version : "");
+  log_error("[ipdetect] failed host=%s port=%d path=%s ip_version=%s", host, port, path, ip_version ? ip_version : "");
   return -1;
 }
 

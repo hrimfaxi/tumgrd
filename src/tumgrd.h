@@ -18,8 +18,13 @@ struct tumgrd_ctx {
   bool                      ubus_obj_added;
 };
 
-#define TUMGRD_DB_PATH              "/lib/tumgrd/tumgrd.db"
-#define TUMGRD_DEFAULT_IP_CHECK_URL "ip.3322.net"
+#define TUMGRD_DB_PATH               "/lib/tumgrd/tumgrd.db"
+#define TUMGRD_DEFAULT_IP_CHECK_URL  "http://ip.3322.net/"
+#define TUMGRD_DEFAULT_IP_CHECK_HOST "ip.3322.net"
+#define TUMGRD_DEFAULT_IP_CHECK_PATH "/"
+#define TUMGRD_DEFAULT_IP_CHECK_PORT 80
+
+#define TUMGRD_IPDETECT_FWMARK 2
 
 #define TUMGRD_STATUS_ACTIVE  "active"
 #define TUMGRD_STATUS_ERROR   "error"
