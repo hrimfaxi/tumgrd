@@ -95,4 +95,6 @@ if (UCI_INCLUDE_DIR AND UCI_LIBRARY)
   target_link_libraries(tumgrd PRIVATE ${UCI_LIBRARY})
 endif()
 
+install(TARGETS tumgrd DESTINATION bin)
+
 # vim: set sw=2 ts=2 et:
