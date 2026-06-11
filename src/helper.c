@@ -45,10 +45,18 @@ int parse_interval(const char *input, uint32_t *out_interval) {
 }
 
 bool streqcase(const char *a, const char *b) {
+  if (a == b)
+    return true;
+  if (!a || !b)
+    return false;
   return strcasecmp(a, b) == 0;
 }
 
 bool streq(const char *a, const char *b) {
+  if (a == b)
+    return true;
+  if (!a || !b)
+    return false;
   return strcmp(a, b) == 0;
 }
 
