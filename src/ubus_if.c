@@ -461,7 +461,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
     blobmsg_add_string(&b, "status", err == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
-    blobmsg_add_string(&b, "note", "force accepted for compatibility; current reconcile path is always full apply");
+    blobmsg_add_string(&b, "note", "force=true forces apply; otherwise apply only when IP changed or status error");
     add_node_brief(&b, &node);
 
     ubus_send_reply(ctx, req, b.head);

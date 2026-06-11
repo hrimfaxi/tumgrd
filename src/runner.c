@@ -351,7 +351,7 @@ int tumgrd_runner_server_del(const struct tumgrd_node *node) {
   int   err    = -1;
   char *script = NULL;
 
-  try2(asprintf(&script, "server-del uid %s\n", node->uid), "aprintf");
+  try2(asprintf(&script, "server-del uid %s\n", node->uid), "asprintf");
   log_trimmed("[runner] server del stdin", script);
   try2(run_tuctl_script(node, script, "server deleted:"));
   err = 0;

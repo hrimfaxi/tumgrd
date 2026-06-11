@@ -17,7 +17,6 @@
 #include <string.h>
 #include <strings.h>
 
-#define TUMGRD_STARTUP_RECONCILE_DELAY_MS 3000
 #define DEFAULT_SOCKET_PATH               NULL
 #define DEFAULT_LOG_LEVEL                 "info"
 #define DEFAULT_INTERVAL                  60
