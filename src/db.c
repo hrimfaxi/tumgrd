@@ -431,6 +431,11 @@ int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int 
 
   err = 0;
 
+  if (sqlite3_changes(conn) == 0) {
+    log_warn("[db] update_runtime affected 0 rows: host=%s port=%d uid=%s ip_version=%s", server_host, server_port, uid,
+             ip_version);
+  }
+
 err_cleanup:
   if (stmt)
     sqlite3_finalize(stmt);
