@@ -67,7 +67,7 @@ message(STATUS "SQLite3_INCLUDE_DIRS = ${SQLite3_INCLUDE_DIRS}")
 message(STATUS "SQLite3_LIBRARIES    = ${SQLite3_LIBRARIES}")
 
 add_executable(tumgrd
-  src/log.c
+  src/log_impl.c
   src/main.c
   src/db.c
   src/reconcile.c
