@@ -219,8 +219,14 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
   }
   close(stderr_pipe[0]);
 
-  if (waitpid(pid, &status, 0) < 0) {
-    return -1;
+  for (;;) {
+    pid_t waited = waitpid(pid, &status, 0);
+    if (waited == pid) {
+      break;
+    }
+    if (waited < 0 && errno != EINTR) {
+      return -1;
+    }
   }
 
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
