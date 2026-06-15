@@ -205,7 +205,8 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
 
   sqlite3_stmt      *stmt = NULL;
   struct tumgrd_node n;
-  int                err = -1;
+  int                err  = -1;
+  sqlite3           *conn = NULL;
 
   if (!db || !db->conn || !node) {
     goto err_cleanup;
@@ -230,8 +231,7 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
     copy_string(n.status, sizeof(n.status), TUMGRD_STATUS_ACTIVE);
   }
 
-  sqlite3 *conn = db->conn;
-
+  conn = db->conn;
   SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(upsert)");
   SQLITE_TRY(bind_required_text(stmt, 1, n.uid), conn, "bind(uid)");
   SQLITE_TRY(bind_text_or_null(stmt, 2, nonempty_or_null(n.description)), conn, "bind(description)");
@@ -252,6 +252,11 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(upsert)");
   err = 0;
 err_cleanup:
+  if (err != 0 && conn && sqlite3_errcode(conn) == SQLITE_CONSTRAINT) {
+    log_error("[db] upsert constraint violation (possible duplicate client_port): "
+              "host=%s port=%d uid=%s ip_version=%s client_port=%d",
+              n.server_host, n.server_port, n.uid, n.ip_version, n.client_port);
+  }
   if (stmt)
     sqlite3_finalize(stmt);
   return err;
