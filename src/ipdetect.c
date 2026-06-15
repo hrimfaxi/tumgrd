@@ -309,6 +309,10 @@ static int parse_url_host_path(const char *url, char *host, size_t host_size, in
     log_error("[ipdetect] host too long in URL: %s", url);
     return -1;
   }
+  if (host_len == 0) {
+    log_error("[ipdetect] empty host in URL: %s", url);
+    return -1;
+  }
   memcpy(host, host_start, host_len);
   host[host_len] = '\0';
 
