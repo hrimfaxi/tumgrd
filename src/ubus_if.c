@@ -201,6 +201,16 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   const char *uid         = blobmsg_get_string(tb[REG_UID]);
   const char *server_host = blobmsg_get_string(tb[REG_SERVER_HOST]);
   int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
+  int         client_port = (int) blobmsg_get_u32(tb[REG_CLIENT_PORT]);
+
+  if (server_port <= 0 || server_port > 65535) {
+    log_error("[register] invalid server_port: %d", server_port);
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
+  if (client_port <= 0 || client_port > 65535) {
+    log_error("[register] invalid client_port: %d", client_port);
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
 
   char ip_version[16];
   if (get_normalized_ip_version(tb[REG_IP_VERSION], ip_version, sizeof(ip_version), "register") != 0) {
@@ -221,7 +231,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   snprintf(node.uid, sizeof(node.uid), "%s", uid);
   snprintf(node.server_host, sizeof(node.server_host), "%s", server_host);
   node.server_port = server_port;
-  node.client_port = (int) blobmsg_get_u32(tb[REG_CLIENT_PORT]);
+  node.client_port = client_port;
   snprintf(node.psk, sizeof(node.psk), "%s", blobmsg_get_string(tb[REG_PSK]));
 
   // 如果是创建且启用 XOR，生成随机密钥
