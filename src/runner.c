@@ -204,12 +204,18 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
   close(stdin_pipe[1]);
 
   if (stdout_buf && stdout_buf_len > 0) {
-    read_all_fd(stdout_pipe[0], stdout_buf, stdout_buf_len);
+    if (read_all_fd(stdout_pipe[0], stdout_buf, stdout_buf_len) != 0) {
+      char errbuf[64];
+      log_warn("[runner] failed to read stdout from %s: %s", argv[0], strerror_r(errno, errbuf, sizeof(errbuf)));
+    }
   }
   close(stdout_pipe[0]);
 
   if (stderr_buf && stderr_buf_len > 0) {
-    read_all_fd(stderr_pipe[0], stderr_buf, stderr_buf_len);
+    if (read_all_fd(stderr_pipe[0], stderr_buf, stderr_buf_len) != 0) {
+      char errbuf[64];
+      log_warn("[runner] failed to read stderr from %s: %s", argv[0], strerror_r(errno, errbuf, sizeof(errbuf)));
+    }
   }
   close(stderr_pipe[0]);
 
