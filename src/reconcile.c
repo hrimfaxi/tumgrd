@@ -76,7 +76,7 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
   err = 0;
 err_cleanup:
   if (err) {
-    mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_ERROR, now_unix());
+    mark_runtime(db, node, detected_ip[0] ? detected_ip : node->current_ip, TUMGRD_STATUS_ERROR, now_unix());
   }
   return err;
 }
