@@ -104,8 +104,8 @@ static void add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
     blobmsg_add_string(b, "node_status", "");
   }
 
-  blobmsg_add_u32(b, "created_at", (uint32_t) n->created_at);
-  blobmsg_add_u32(b, "last_updated", (uint32_t) n->last_updated);
+  blobmsg_add_u64(b, "created_at", (uint64_t) n->created_at);
+  blobmsg_add_u64(b, "last_updated", (uint64_t) n->last_updated);
 
   if (n->has_memlimit) {
     blobmsg_add_u32(b, "memlimit", (uint32_t) n->memlimit);
