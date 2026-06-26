@@ -50,6 +50,11 @@ void tumgrd_db_close(struct tumgrd_db *db);
 
 int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node);
 
+/*
+ * 返回 0 表示成功，节点写入 *out
+ * 返回 1 表示未找到
+ * 返回 -1 表示数据库错误 / 参数错误
+ */
 int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid, const char *ip_version,
                        struct tumgrd_node *out);
 

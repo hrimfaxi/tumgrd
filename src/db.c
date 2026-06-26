@@ -288,16 +288,19 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
   SQLITE_TRY(bind_required_text(stmt, 3, uid), conn, "bind(uid)");
   SQLITE_TRY(bind_required_text(stmt, 4, ip_version), conn, "bind(ip_version)");
 
-  err = sqlite3_step(stmt);
+  {
+    int rc = sqlite3_step(stmt);
 
-  if (err == SQLITE_DONE) {
-    err = 1; // 没找到
-    goto err_cleanup;
-  }
+    if (rc == SQLITE_DONE) {
+      err = 1; // 没找到
+      goto err_cleanup;
+    }
 
-  if (err != SQLITE_ROW) {
-    sqlite_log_error(conn, "step(get)", err);
-    goto err_cleanup;
+    if (rc != SQLITE_ROW) {
+      sqlite_log_error(conn, "step(get)", rc);
+      err = -1;
+      goto err_cleanup;
+    }
   }
 
   row_to_node(stmt, out);
