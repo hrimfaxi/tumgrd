@@ -188,3 +188,7 @@ Options:
       --fwmark NUM         IP 检测的 SO_MARK 值（0-255，默认：2）
   -h, --help               显示帮助
 ```
+
+## 许可证
+
+本项目基于 [GNU General Public License v2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) 发布。
