@@ -17,9 +17,9 @@
 #include <string.h>
 #include <strings.h>
 
-#define DEFAULT_SOCKET_PATH               NULL
-#define DEFAULT_LOG_LEVEL                 "info"
-#define DEFAULT_INTERVAL                  60
+#define DEFAULT_SOCKET_PATH NULL
+#define DEFAULT_LOG_LEVEL   "info"
+#define DEFAULT_INTERVAL    60
 
 static void config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
