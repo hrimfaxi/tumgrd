@@ -1,6 +1,6 @@
 # tumgrd
 
-tumgrd 是一个运行在 OpenWrt 上的守护进程，用于控制 [tutuicmptunnel-kmod](https://github.com/hrimfaxi/tutuicmptunnel) 内核模块。
+tumgrd 是一个运行在 OpenWrt 上的守护进程，用于控制 [tutuicmptunnel-kmod](https://github.com/hrimfaxi/tutuicmptunnel-kmod) 内核模块。
 
 ## 概述
 
