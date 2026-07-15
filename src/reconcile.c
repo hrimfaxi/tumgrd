@@ -32,7 +32,7 @@ static int mark_runtime(struct tumgrd_db *db, const struct tumgrd_node *node, co
                                   ts);
 }
 
-int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool force) {
+int tumgrd_reconcile_one(struct tumgrd_db *db, const struct tumgrd_config *cfg, struct tumgrd_node *node, bool force) {
   char    detected_ip[64] = {0};
   int64_t now;
   int     err;
@@ -62,7 +62,8 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, struct tumgrd_node *node, bool fo
            node->current_ip, ip_changed ? 1 : 0, was_error ? 1 : 0, need_apply ? 1 : 0);
 
   if (need_apply) {
-    try2(tumgrd_runner_server_add(node, detected_ip), "[reconcile] server-add failed uid=%s ip=%s", node->uid, detected_ip);
+    try2(tumgrd_runner_server_add(node, cfg, detected_ip), "[reconcile] server-add failed uid=%s ip=%s", node->uid,
+         detected_ip);
 
     try2(tumgrd_runner_reset_local_client(node), "[reconcile] reset local client failed uid=%s", node->uid);
   } else {
@@ -81,7 +82,7 @@ err_cleanup:
   return err;
 }
 
-int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
+int tumgrd_reconcile_all(struct tumgrd_db *db, const struct tumgrd_config *cfg, bool force) {
   struct tumgrd_node *nodes = NULL;
   size_t              count = 0;
   size_t              i;
@@ -96,7 +97,7 @@ int tumgrd_reconcile_all(struct tumgrd_db *db, bool force) {
   log_info("[reconcile] establishing tuctl: reconcile_all count=%zu force=%d", count, force ? 1 : 0);
 
   for (i = 0; i < count; i++) {
-    if (tumgrd_reconcile_one(db, &nodes[i], force)) {
+    if (tumgrd_reconcile_one(db, cfg, &nodes[i], force)) {
       failed++;
     }
   }

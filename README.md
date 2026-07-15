@@ -97,6 +97,7 @@ config tumgrd 'main'
     option interval '60'
     option log_level 'info'
     option enable_xor '1'
+    option use_client_ip '1'
 ```
 
 | 选项 | 默认值 | 说明 |
@@ -106,6 +107,7 @@ config tumgrd 'main'
 | `interval` | `60` | 周期性检查间隔（秒） |
 | `log_level` | `info` | 日志级别：error/warn/info/debug/trace |
 | `enable_xor` | `0` | 新注册节点是否自动生成 XOR 密钥 |
+| `use_client_ip` | `1` | 是否使用 @client_ip@ 占位符（启用后服务端自动解析客户端 IP） |
 
 ## 使用
 

@@ -23,12 +23,13 @@
 
 static void config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
-  cfg->db_path      = TUMGRD_DB_PATH;
-  cfg->socket_path  = DEFAULT_SOCKET_PATH;
-  cfg->log_level    = DEFAULT_LOG_LEVEL;
-  cfg->interval_sec = DEFAULT_INTERVAL;
-  cfg->enable_xor   = false;
-  cfg->fwmark       = TUMGRD_IPDETECT_FWMARK;
+  cfg->db_path       = TUMGRD_DB_PATH;
+  cfg->socket_path   = DEFAULT_SOCKET_PATH;
+  cfg->log_level     = DEFAULT_LOG_LEVEL;
+  cfg->interval_sec  = DEFAULT_INTERVAL;
+  cfg->enable_xor    = false;
+  cfg->use_client_ip = true;
+  cfg->fwmark        = TUMGRD_IPDETECT_FWMARK;
 }
 
 static void usage(FILE *out, const char *prog) {
@@ -42,6 +43,8 @@ static void usage(FILE *out, const char *prog) {
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "      --enable-xor         enable automatic XOR key generation for new nodes\n"
           "      --disable-xor        disable automatic XOR key generation (default)\n"
+          "      --use-client-ip      use @client_ip@ placeholder (default)\n"
+          "      --no-client-ip       use detected IP instead of @client_ip@\n"
           "      --fwmark NUM         SO_MARK value for IP detection (0-255, default: %d)\n"
           "  -h, --help               show this help\n",
           prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL,
@@ -59,6 +62,8 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
                                             {"help", no_argument, NULL, 'h'},
                                             {"enable-xor", no_argument, NULL, 2},
                                             {"disable-xor", no_argument, NULL, 3},
+                                            {"use-client-ip", no_argument, NULL, 5},
+                                            {"no-client-ip", no_argument, NULL, 6},
                                             {"fwmark", required_argument, NULL, 4},
                                             {0, 0, 0, 0}};
 
@@ -91,6 +96,12 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       }
       cfg->fwmark = val;
     } break;
+    case 5:
+      cfg->use_client_ip = true;
+      break;
+    case 6:
+      cfg->use_client_ip = false;
+      break;
     case 'h':
       usage(stdout, argv[0]);
       err = 1;

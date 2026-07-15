@@ -8,7 +8,7 @@ PROG=/usr/sbin/tumgrd
 CONFIGNAME="tumgrd"
 
 start_service() {
-	local enabled database interval log_level enable_xor
+	local enabled database interval log_level enable_xor use_client_ip
 
 	config_load "$CONFIGNAME"
 	config_get enabled main enabled '1'
@@ -18,10 +18,14 @@ start_service() {
 	config_get interval main interval '300'
 	config_get log_level main log_level 'info'
 	config_get enable_xor main enable_xor '0'
+	config_get use_client_ip main use_client_ip '1'
 
 	args="-d $database -i $interval"
 	if [ "$enable_xor" = "1" ]; then
 		args="$args --enable-xor"
+	fi
+	if [ "$use_client_ip" = "0" ]; then
+		args="$args --no-client-ip"
 	fi
 	args="$args --log-level $log_level"
 

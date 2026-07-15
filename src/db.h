@@ -41,6 +41,7 @@ struct tumgrd_config {
   const char *log_level;
   uint32_t    interval_sec;
   bool        enable_xor;
+  bool        use_client_ip;
   int         fwmark;
 };
 

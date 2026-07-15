@@ -310,7 +310,7 @@ static int run_ktuctl(char *const argv[]) {
   return rc;
 }
 
-int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current_ip) {
+int tumgrd_runner_server_add(const struct tumgrd_node *node, const struct tumgrd_config *cfg, const char *current_ip) {
   if (!node || !current_ip || current_ip[0] == '\0') {
     return -1;
   }
@@ -330,19 +330,22 @@ int tumgrd_runner_server_add(const struct tumgrd_node *node, const char *current
     snprintf(xor_suffix, sizeof(xor_suffix), " xor %s", node->xor_key);
   }
 
-  /* 先尝试 @client_ip@ 占位符，由服务端解析客户端地址 */
-  try2(asprintf(&script, "server-add uid %s port %d address @client_ip@%s%s\n", node->uid, node->client_port, xor_suffix,
-                comment_suffix),
-       "asprintf");
-  log_trimmed("[runner] server add stdin (client_ip placeholder)", script);
-  if (run_tuctl_script(node, script, "server updated:") == 0) {
+  if (cfg && cfg->use_client_ip) {
+    /* 先尝试 @client_ip@ 占位符，由服务端解析客户端地址 */
+    try2(asprintf(&script, "server-add uid %s port %d address @client_ip@%s%s\n", node->uid, node->client_port, xor_suffix,
+                  comment_suffix),
+         "asprintf");
+    log_trimmed("[runner] server add stdin (client_ip placeholder)", script);
+    if (run_tuctl_script(node, script, "server updated:") == 0) {
+      TUMGRD_FREE(script);
+      return 0;
+    }
+
+    /* 回退：使用检测到的实际 IP（兼容旧版 tuctl_server） */
+    log_info("[runner] @client_ip@ not supported, falling back to detected ip=%s uid=%s", current_ip, node->uid);
     TUMGRD_FREE(script);
-    return 0;
   }
 
-  /* 回退：使用检测到的实际 IP（兼容旧版 tuctl_server） */
-  log_info("[runner] @client_ip@ not supported, falling back to detected ip=%s uid=%s", current_ip, node->uid);
-  TUMGRD_FREE(script);
   try2(asprintf(&script, "server-add uid %s port %d address %s%s%s\n", node->uid, node->client_port, current_ip, xor_suffix,
                 comment_suffix),
        "asprintf");

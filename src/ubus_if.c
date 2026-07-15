@@ -279,7 +279,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
    * register 后立刻应用配置。
    * 失败时仍保留 DB 中的 desired state，方便后续自愈。
    */
-  err = tumgrd_reconcile_one(&tctx->db, &node, true);
+  err = tumgrd_reconcile_one(&tctx->db, &tctx->cfg, &node, true);
 
   // 如果 reconcile 成功，重新从 DB 读取最新节点状态
   if (err == 0) {
@@ -415,7 +415,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
   blob_buf_init(&b, 0);
 
   if (is_all) {
-    err = tumgrd_reconcile_all(&tctx->db, is_force);
+    err = tumgrd_reconcile_all(&tctx->db, &tctx->cfg, is_force);
 
     blobmsg_add_string(&b, "status", err == 0 ? "ok" : "partial_error");
     blobmsg_add_string(&b, "scope", "all");
@@ -456,7 +456,7 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
       return UBUS_STATUS_UNKNOWN_ERROR;
     }
 
-    err = tumgrd_reconcile_one(&tctx->db, &node, is_force);
+    err = tumgrd_reconcile_one(&tctx->db, &tctx->cfg, &node, is_force);
 
     blobmsg_add_string(&b, "status", err == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
@@ -644,7 +644,7 @@ static void net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev
 
     if (is_wan) {
       log_info("[ubus] WAN interface %s up, force reconcile", ifname);
-      tumgrd_reconcile_all(&tctx->db, true);
+      tumgrd_reconcile_all(&tctx->db, &tctx->cfg, true);
     }
   }
 }
@@ -652,13 +652,13 @@ static void net_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev
 static void startup_reconcile_timer_cb(struct uloop_timeout *t) {
   struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, startup_reconcile_timer);
 
-  tumgrd_reconcile_all(&ctx->db, true);
+  tumgrd_reconcile_all(&ctx->db, &ctx->cfg, true);
 }
 
 static void periodic_reconcile_timer_cb(struct uloop_timeout *t) {
   struct tumgrd_ctx *ctx = container_of(t, struct tumgrd_ctx, periodic_reconcile_timer);
 
-  tumgrd_reconcile_all(&ctx->db, false);
+  tumgrd_reconcile_all(&ctx->db, &ctx->cfg, false);
   uloop_timeout_set(&ctx->periodic_reconcile_timer, ctx->cfg.interval_sec * 1000);
 }
 
