@@ -21,6 +21,7 @@ const char *nonempty_or_default(const char *input, const char *def_str);
 const char *nonempty_or_null(const char *s);
 int         ensure_parent_dir(const char *path);
 int         check_wan_interface(const char *ifname, bool *is_wan);
+bool        is_safe_id(const char *s);
 int         generate_random_hex_key(char *out, size_t out_size, size_t key_bytes);
 
 // vim: set sw=2 ts=2 et:

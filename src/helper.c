@@ -239,6 +239,17 @@ err_cleanup:
 #endif
 }
 
+bool is_safe_id(const char *s) {
+  if (!s || s[0] == '\0')
+    return false;
+  for (const char *p = s; *p; p++) {
+    unsigned char c = (unsigned char) *p;
+    if (c < 0x20 || c == 0x7f || c == ' ')
+      return false;
+  }
+  return true;
+}
+
 int generate_random_hex_key(char *out, size_t out_size, size_t key_bytes) {
   if (!out || out_size < key_bytes * 2 + 1)
     return -1;

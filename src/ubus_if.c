@@ -203,6 +203,11 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   int         server_port = (int) blobmsg_get_u32(tb[REG_SERVER_PORT]);
   int         client_port = (int) blobmsg_get_u32(tb[REG_CLIENT_PORT]);
 
+  if (!is_safe_id(uid)) {
+    log_error("[register] uid contains invalid characters: %s", uid);
+    return UBUS_STATUS_INVALID_ARGUMENT;
+  }
+
   if (server_port <= 0 || server_port > 65535) {
     log_error("[register] invalid server_port: %d", server_port);
     return UBUS_STATUS_INVALID_ARGUMENT;
