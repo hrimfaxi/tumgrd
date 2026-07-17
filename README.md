@@ -589,6 +589,10 @@ Options:
   -h, --help               显示帮助
 ```
 
+## LuCI Web 管理界面
+
+[`luci-app-tumgrd`](https://github.com/hrimfaxi/luci-app-tumgrd) 提供基于 LuCI 的 Web 管理界面，支持节点注册/编辑/删除、状态查看、一键刷新等功能，详见项目主页。
+
 ## 运维与排障
 
 ### 查看日志
