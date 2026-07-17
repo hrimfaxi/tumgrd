@@ -2,7 +2,7 @@
 
 运行在 OpenWrt 上的 `tutuicmptunnel` 节点管理守护进程。
 
-`tumgrd` 用于维护 ICMP 隧道两端的配置：它向远程 `tutuicmptunnel` 服务器注册本机隧道端点，并通过 `ktuctl` 配置本地 `tutuicmptunnel-kmod` 内核模块的客户端连接。
+`tumgrd` 用于维护 ICMP 隧道两端的配置：它向远程 `tutuicmptunnel` 服务器注册本机隧道端点，并通过 `ktuctl` 配置本地 [`tutuicmptunnel-kmod`](https://github.com/hrimfaxi/tutuicmptunnel-kmod) 内核模块的客户端连接。
 
 它主要面向公网 IP 会动态变化的家庭宽带、企业网关等场景。当 WAN 公网 IP 变化、WAN 接口重新上线，或节点此前同步失败时，`tumgrd` 会自动重新应用隧道配置，无需手动删除并重新注册节点。
 
