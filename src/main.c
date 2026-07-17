@@ -177,6 +177,7 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
+  signal(SIGPIPE, SIG_IGN);
 
   try2(tumgrd_db_open(&ctx.db, ctx.cfg.db_path), "[main] open db failed: %s", ctx.cfg.db_path);
   db_opened = true;
