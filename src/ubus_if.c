@@ -260,8 +260,14 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   }
 
   if (tb[REG_MEMLIMIT]) {
-    node.has_memlimit = 1;
-    node.memlimit     = (int) blobmsg_get_u32(tb[REG_MEMLIMIT]);
+    int val = (int) blobmsg_get_u32(tb[REG_MEMLIMIT]);
+    if (val > 0) {
+      node.has_memlimit = 1;
+      node.memlimit     = val;
+    } else {
+      node.has_memlimit = 0;
+      node.memlimit     = 0;
+    }
   }
 
   if (tb[REG_IP_CHECK_URL]) {
