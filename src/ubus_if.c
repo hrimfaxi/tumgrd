@@ -277,8 +277,13 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   snprintf(node.ip_version, sizeof(node.ip_version), "%s", ip_version);
 
   if (tb[REG_XOR_KEY]) {
+    const char *xor_val = blobmsg_get_string(tb[REG_XOR_KEY]);
+    if (!is_safe_id(xor_val)) {
+      log_error("[register] xor_key contains invalid characters");
+      return UBUS_STATUS_INVALID_ARGUMENT;
+    }
     log_info("Override XOR key for node %s", node.uid);
-    snprintf(node.xor_key, sizeof(node.xor_key), "%s", blobmsg_get_string(tb[REG_XOR_KEY]));
+    snprintf(node.xor_key, sizeof(node.xor_key), "%s", xor_val);
   }
 
   err = tumgrd_db_upsert_node(&tctx->db, &node);
