@@ -88,13 +88,14 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       cfg->enable_xor = false;
       break;
     case 4: {
-      int val = atoi(optarg);
-      if (val < 0 || val > 255) {
+      char *endptr = NULL;
+      long  val    = strtol(optarg, &endptr, 10);
+      if (!endptr || *endptr || endptr == optarg || val < 0 || val > 255) {
         log_error("invalid fwmark: %s (must be 0-255)", optarg);
         err = -1;
         goto err_cleanup;
       }
-      cfg->fwmark = val;
+      cfg->fwmark = (int) val;
     } break;
     case 5:
       cfg->use_client_ip = true;
