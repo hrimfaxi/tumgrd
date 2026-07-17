@@ -294,6 +294,10 @@ make
 - `openwrt-x86_64.cmake`
 - `openwrt-ramips.cmake`
 
+### 构建 OpenWrt 安装包（ipk / apk）
+
+参见 [`openwrt-tumgrd`](https://github.com/hrimfaxi/openwrt-tumgrd) 仓库说明。
+
 ### 部署到 OpenWrt
 
 将文件复制到路由器：
