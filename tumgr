@@ -6,7 +6,7 @@ UBUS_OBJECT="${UBUS_OBJECT:-tumgrd}"
 usage() {
   cat <<'EOF'
   Usage:
-  tumgr register -uid <uid> -server-host <host> -server-port <port> -client-port <port> -psk <psk> [-memlimit <n>] [-description <text>] [-ip-check-url <url>] [-ip-version <ipv4|ipv6>] [-socket <path>]
+  tumgr register -uid <uid> -server-host <host> -server-port <port> -client-port <port> -psk <psk> [-memlimit <n>] [-description <text>] [-ip-check-url <url>] [-ip-version <ipv4|ipv6>] [-lifetime <sec>] [-socket <path>]
   tumgr deregister -uid <uid> -server-host <host> -server-port <port> -ip-version <ipv4|ipv6> [-socket <path>]
   tumgr refresh    -uid <uid> -server-host <host> -server-port <port> -ip-version <ipv4|ipv6> [-force] [-socket <path>]
   tumgr refresh -all [-force] [-socket <path>]
@@ -62,6 +62,7 @@ cmd_register() {
   client_comment=""
   ip_check_url=""
   ip_version=""
+  lifetime=""
   socket_path=""
 
   while [ $# -gt 0 ]; do
@@ -116,6 +117,11 @@ cmd_register() {
       ip_version="$2"
       shift 2
       ;;
+    -lifetime | -L)
+      [ $# -ge 2 ] || err "option -lifetime requires an argument"
+      lifetime="$2"
+      shift 2
+      ;;
     -socket | -s)
       [ $# -ge 2 ] || err "option -socket requires an argument"
       socket_path="$2"
@@ -145,6 +151,10 @@ cmd_register() {
     memlimit=0
   fi
 
+  if [ -n "$lifetime" ]; then
+    is_uint "$lifetime" || err "-lifetime must be an integer"
+  fi
+
   payload="{"
   payload="$payload\"uid\":\"$(json_escape "$uid")\""
   payload="$payload,\"server_host\":\"$(json_escape "$server_host")\""
@@ -167,6 +177,10 @@ cmd_register() {
 
   if [ -n "$ip_version" ]; then
     payload="$payload,\"ip_version\":\"$(json_escape "$ip_version")\""
+  fi
+
+  if [ -n "$lifetime" ]; then
+    payload="$payload,\"lifetime\":$lifetime"
   fi
 
   payload="$payload}"
@@ -353,11 +367,11 @@ cmd_status() {
     C_RESET=$(printf '\033[0m')
   fi
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
-    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "XOR" "UPDATED" "STATUS"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-10s %-16s %-19s %-10s\n" \
+    "UID" "SERVER" "S-PORT" "C-PORT" "MEMLIMIT" "VER" "IP" "XOR" "LIFETIME" "ROTATION" "UPDATED" "STATUS"
 
-  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
-    "------------" "------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "---" "-------------------" "----------"
+  printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-10s %-16s %-19s %-10s\n" \
+    "------------" "------------------------------" "-------" "-------" "----------" "-----" "--------------------------------------" "---" "----------" "----------------" "-------------------" "----------"
 
   count=$(echo "$json" | jsonfilter -e '@.nodes[@.uid]' | wc -l)
 
@@ -373,6 +387,8 @@ cmd_status() {
     updated=$(echo "$json" | jsonfilter -e "@.nodes[$i].last_updated")
     raw_status=$(echo "$json" | jsonfilter -e "@.nodes[$i].node_status")
     xor_val=$(echo "$json" | jsonfilter -e "@.nodes[$i].xor")
+    lt=$(echo "$json" | jsonfilter -e "@.nodes[$i].lifetime")
+    rot=$(echo "$json" | jsonfilter -e "@.nodes[$i].rotation_state")
 
     [ -n "$mem" ] || mem=0
     [ -n "$ver" ] || ver="-"
@@ -404,11 +420,23 @@ cmd_status() {
       xor_display="no"
     fi
 
+    if [ -n "$lt" ] && [ "$lt" != "0" ]; then
+      lt_display="${lt}s"
+    else
+      lt_display="-"
+    fi
+
+    case "$rot" in
+    1) rot_display="pending-remote" ;;
+    2) rot_display="pending-local" ;;
+    *) rot_display="-" ;;
+    esac
+
     host=$(printf "%.${host_width}s" "$host")
     ip=$(printf "%.${ip_width}s" "$ip")
 
-    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-19s %-10s\n" \
-      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$xor_display" "$updated" "$status"
+    printf "%-12s %-${host_width}s %-7s %-7s %-10s %-5s %-${ip_width}s %-5s %-10s %-16s %-19s %-10s\n" \
+      "$uid" "$host" "$sport" "$cport" "$mem" "$ver" "$ip" "$xor_display" "$lt_display" "$rot_display" "$updated" "$status"
 
     i=$((i + 1))
   done

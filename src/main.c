@@ -30,6 +30,7 @@ static void config_init(struct tumgrd_config *cfg) {
   cfg->enable_xor    = false;
   cfg->use_client_ip = true;
   cfg->fwmark        = TUMGRD_IPDETECT_FWMARK;
+  cfg->default_lifetime = 0;
 }
 
 static void usage(FILE *out, const char *prog) {
@@ -46,6 +47,7 @@ static void usage(FILE *out, const char *prog) {
           "      --use-client-ip      use @client_ip@ placeholder (default)\n"
           "      --no-client-ip       use detected IP instead of @client_ip@\n"
           "      --fwmark NUM         SO_MARK value for IP detection (0-255, default: %d)\n"
+          "      --lifetime SEC       default node lifetime in seconds (0=disabled, >=60, default: 0)\n"
           "  -h, --help               show this help\n",
           prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL,
           TUMGRD_IPDETECT_FWMARK);
@@ -65,6 +67,7 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
                                             {"use-client-ip", no_argument, NULL, 5},
                                             {"no-client-ip", no_argument, NULL, 6},
                                             {"fwmark", required_argument, NULL, 4},
+                                            {"lifetime", required_argument, NULL, 7},
                                             {0, 0, 0, 0}};
 
   while ((c = getopt_long(argc, argv, "d:i:s:h", long_opts, NULL)) != -1) {
@@ -102,6 +105,9 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
       break;
     case 6:
       cfg->use_client_ip = false;
+      break;
+    case 7:
+      try2(parse_lifetime(optarg, &cfg->default_lifetime), "invalid lifetime: %s", optarg);
       break;
     case 'h':
       usage(stdout, argv[0]);
@@ -185,9 +191,10 @@ int main(int argc, char **argv) {
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s", nonempty_or_default(ctx.cfg.db_path, "(null)"),
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s lifetime=%lld", nonempty_or_default(ctx.cfg.db_path, "(null)"),
            nonempty_or_default(ctx.cfg.socket_path, "(default)"), ctx.cfg.interval_sec,
-           nonempty_or_default(ctx.cfg.log_level, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "");
+           nonempty_or_default(ctx.cfg.log_level, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "",
+           (long long) ctx.cfg.default_lifetime);
 
   uloop_run();
 

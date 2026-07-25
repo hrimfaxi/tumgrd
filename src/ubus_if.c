@@ -321,7 +321,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     node.lifetime = lt_value;
   }
 
-  err = tumgrd_db_upsert_node(&tctx->db, &node, false);
+  err = tumgrd_db_upsert_node(&tctx->db, &node, set_lifetime);
   if (err != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
