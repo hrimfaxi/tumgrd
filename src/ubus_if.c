@@ -199,9 +199,9 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   int                get_rc;
   const char        *action;
   int                err;
-  struct blob_buf    b = {0};
+  struct blob_buf    b            = {0};
   bool               set_lifetime = false;
-  int64_t            lt_value = 0;
+  int64_t            lt_value     = 0;
 
   (void) method;
   struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
@@ -245,10 +245,10 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     node   = old_node;
     action = "updated";
   } else if (get_rc == 1) {
-    int64_t now = (int64_t) time(NULL);
-    action = "created";
-    set_lifetime = true;
-    node.lifetime = tctx->cfg.default_lifetime;
+    int64_t now          = (int64_t) time(NULL);
+    action               = "created";
+    set_lifetime         = true;
+    node.lifetime        = tctx->cfg.default_lifetime;
     node.last_applied_at = (now >= TUMGRD_MIN_SANE_TIME) ? now : 0;
   } else {
     return UBUS_STATUS_UNKNOWN_ERROR;
@@ -309,7 +309,7 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
 
   if (tb[REG_LIFETIME]) {
     set_lifetime = true;
-    lt_value = (int64_t) blobmsg_get_u32(tb[REG_LIFETIME]);
+    lt_value     = (int64_t) blobmsg_get_u32(tb[REG_LIFETIME]);
     if (lt_value != 0 && lt_value < TUMGRD_LIFETIME_MIN) {
       log_error("[register] lifetime must be 0 (disabled) or >= %d: %lld", TUMGRD_LIFETIME_MIN, (long long) lt_value);
       return UBUS_STATUS_INVALID_ARGUMENT;

@@ -23,13 +23,13 @@
 
 static void config_init(struct tumgrd_config *cfg) {
   memset(cfg, 0, sizeof(*cfg));
-  cfg->db_path       = TUMGRD_DB_PATH;
-  cfg->socket_path   = DEFAULT_SOCKET_PATH;
-  cfg->log_level     = DEFAULT_LOG_LEVEL;
-  cfg->interval_sec  = DEFAULT_INTERVAL;
-  cfg->enable_xor    = false;
-  cfg->use_client_ip = true;
-  cfg->fwmark        = TUMGRD_IPDETECT_FWMARK;
+  cfg->db_path          = TUMGRD_DB_PATH;
+  cfg->socket_path      = DEFAULT_SOCKET_PATH;
+  cfg->log_level        = DEFAULT_LOG_LEVEL;
+  cfg->interval_sec     = DEFAULT_INTERVAL;
+  cfg->enable_xor       = false;
+  cfg->use_client_ip    = true;
+  cfg->fwmark           = TUMGRD_IPDETECT_FWMARK;
   cfg->default_lifetime = 0;
 }
 
@@ -57,18 +57,13 @@ static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {
   int c;
   int err;
 
-  static const struct option long_opts[] = {{"database", required_argument, NULL, 'd'},
-                                            {"interval", required_argument, NULL, 'i'},
-                                            {"socket", required_argument, NULL, 's'},
-                                            {"log-level", required_argument, NULL, 1},
-                                            {"help", no_argument, NULL, 'h'},
-                                            {"enable-xor", no_argument, NULL, 2},
-                                            {"disable-xor", no_argument, NULL, 3},
-                                            {"use-client-ip", no_argument, NULL, 5},
-                                            {"no-client-ip", no_argument, NULL, 6},
-                                            {"fwmark", required_argument, NULL, 4},
-                                            {"lifetime", required_argument, NULL, 7},
-                                            {0, 0, 0, 0}};
+  static const struct option long_opts[] =
+    {{"database", required_argument, NULL, 'd'}, {"interval", required_argument, NULL, 'i'},
+     {"socket", required_argument, NULL, 's'},   {"log-level", required_argument, NULL, 1},
+     {"help", no_argument, NULL, 'h'},           {"enable-xor", no_argument, NULL, 2},
+     {"disable-xor", no_argument, NULL, 3},      {"use-client-ip", no_argument, NULL, 5},
+     {"no-client-ip", no_argument, NULL, 6},     {"fwmark", required_argument, NULL, 4},
+     {"lifetime", required_argument, NULL, 7},   {0, 0, 0, 0}};
 
   while ((c = getopt_long(argc, argv, "d:i:s:h", long_opts, NULL)) != -1) {
     switch (c) {
@@ -191,9 +186,9 @@ int main(int argc, char **argv) {
   try2(tumgrd_db_init_schema(&ctx.db), "[main] init schema failed");
   try2(tumgrd_ubus_init(&ctx), "[main] tumgrd_ubus_init failed");
 
-  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s lifetime=%lld", nonempty_or_default(ctx.cfg.db_path, "(null)"),
-           nonempty_or_default(ctx.cfg.socket_path, "(default)"), ctx.cfg.interval_sec,
-           nonempty_or_default(ctx.cfg.log_level, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "",
+  log_info("[main] starting tumgrd: db=%s socket=%s interval=%d log_level=%s%s lifetime=%lld",
+           nonempty_or_default(ctx.cfg.db_path, "(null)"), nonempty_or_default(ctx.cfg.socket_path, "(default)"),
+           ctx.cfg.interval_sec, nonempty_or_default(ctx.cfg.log_level, "(null)"), ctx.cfg.enable_xor ? " xor-enabled" : "",
            (long long) ctx.cfg.default_lifetime);
 
   uloop_run();

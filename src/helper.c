@@ -49,8 +49,8 @@ int parse_lifetime(const char *input, int64_t *out) {
   if (!input || !out)
     return -EINVAL;
 
-  char *endptr = NULL;
-  errno = 0;
+  char *endptr  = NULL;
+  errno         = 0;
   long long val = strtoll(input, &endptr, 0);
   if (endptr == input || *endptr || errno == ERANGE) {
     log_error("Invalid lifetime: %s", input);
