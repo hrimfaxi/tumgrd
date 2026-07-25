@@ -1,4 +1,5 @@
 #include "helper.h"
+#include "db.h"
 #include "log.h"
 #include "try.h"
 
@@ -41,6 +42,32 @@ int parse_interval(const char *input, uint32_t *out_interval) {
     return -EINVAL;
   }
 
+  return 0;
+}
+
+int parse_lifetime(const char *input, int64_t *out) {
+  if (!input || !out)
+    return -EINVAL;
+
+  char *endptr = NULL;
+  errno = 0;
+  long long val = strtoll(input, &endptr, 0);
+  if (endptr == input || *endptr || errno == ERANGE) {
+    log_error("Invalid lifetime: %s", input);
+    return -EINVAL;
+  }
+
+  if (val != 0 && val < TUMGRD_LIFETIME_MIN) {
+    log_error("Lifetime must be 0 (disabled) or >= %d seconds: %s", TUMGRD_LIFETIME_MIN, input);
+    return -EINVAL;
+  }
+
+  if (val > TUMGRD_LIFETIME_MAX) {
+    log_error("Lifetime too large (max %d): %s", TUMGRD_LIFETIME_MAX, input);
+    return -EINVAL;
+  }
+
+  *out = (int64_t) val;
   return 0;
 }
 

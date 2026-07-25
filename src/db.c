@@ -103,6 +103,28 @@ static int row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
   node->last_updated = (int64_t) sqlite3_column_int64(stmt, 12);
   column_text(stmt, 13, node->status, sizeof(node->status));
   column_text(stmt, 14, node->xor_key, sizeof(node->xor_key));
+  node->lifetime = (int64_t) sqlite3_column_int64(stmt, 15);
+  node->last_applied_at = (int64_t) sqlite3_column_int64(stmt, 16);
+
+  if (node->lifetime != 0 && (node->lifetime < TUMGRD_LIFETIME_MIN || node->lifetime > TUMGRD_LIFETIME_MAX)) {
+    log_warn("[db] clamping invalid lifetime %lld to 0 for uid=%s", (long long) node->lifetime, node->uid);
+    node->lifetime = 0;
+  }
+
+  if (node->last_applied_at < 0) {
+    log_warn("[db] clamping negative last_applied_at %lld to 0 for uid=%s", (long long) node->last_applied_at, node->uid);
+    node->last_applied_at = 0;
+  } else if (node->last_applied_at > now_unix() + 86400) {
+    log_warn("[db] last_applied_at %lld is in the future for uid=%s, treating as expired", (long long) node->last_applied_at, node->uid);
+    node->last_applied_at = 1;
+  }
+
+  node->rotation_state = sqlite3_column_int(stmt, 17);
+  column_text(stmt, 18, node->xor_key_pending, sizeof(node->xor_key_pending));
+
+  if (node->rotation_state < TUMGRD_ROTATION_NONE || node->rotation_state > TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) {
+    log_warn("[db] invalid rotation_state %d in DB for uid=%s", node->rotation_state, node->uid);
+  }
 
   return 0;
 }
@@ -133,6 +155,19 @@ err_cleanup:
   return err;
 }
 
+static int migrate_add_column(sqlite3 *conn, const char *sql, const char *what) {
+  char *errmsg = NULL;
+  int   rc     = sqlite3_exec(conn, sql, NULL, NULL, &errmsg);
+  if (rc != SQLITE_OK && errmsg && strstr(errmsg, "duplicate column")) {
+    log_debug("[db] %s: column already exists, skipping", what);
+    rc = SQLITE_OK;
+  } else if (rc != SQLITE_OK) {
+    log_error("[db] %s failed: %s", what, errmsg ? errmsg : "?");
+  }
+  sqlite3_free(errmsg);
+  return rc;
+}
+
 int tumgrd_db_init_schema(struct tumgrd_db *db) {
   static const char *sql = "CREATE TABLE IF NOT EXISTS nodes ("
                            " uid TEXT NOT NULL,"
@@ -150,9 +185,18 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
                            " last_updated INTEGER,"
                            " status TEXT DEFAULT 'active',"
                            " xor_key TEXT,"
+                           " lifetime INTEGER DEFAULT 0,"
+                           " last_applied_at INTEGER DEFAULT 0,"
+                           " rotation_state INTEGER DEFAULT 0,"
+                           " xor_key_pending TEXT DEFAULT '',"
                            " PRIMARY KEY (server_host, server_port, uid, ip_version),"
                            " UNIQUE (server_host, server_port, client_port, ip_version)"
                            ");";
+
+  static const char *migrate_lifetime = "ALTER TABLE nodes ADD COLUMN lifetime INTEGER DEFAULT 0;";
+  static const char *migrate_last_applied = "ALTER TABLE nodes ADD COLUMN last_applied_at INTEGER DEFAULT 0;";
+  static const char *migrate_rotation_state = "ALTER TABLE nodes ADD COLUMN rotation_state INTEGER DEFAULT 0;";
+  static const char *migrate_xor_key_pending = "ALTER TABLE nodes ADD COLUMN xor_key_pending TEXT DEFAULT '';";
 
   char *errmsg = NULL;
   int   err    = -1;
@@ -162,6 +206,59 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
   }
 
   SQLITE_TRY(sqlite3_exec(db->conn, sql, NULL, NULL, &errmsg), db->conn, "init_schema");
+  sqlite3_free(errmsg);
+  errmsg = NULL;
+
+  {
+    sqlite3_stmt *col_stmt = NULL;
+    bool has_lifetime = false;
+    bool has_last_applied = false;
+    bool has_rotation_state = false;
+    bool has_xor_key_pending = false;
+
+    if (sqlite3_prepare_v2(db->conn, "PRAGMA table_info(nodes);", -1, &col_stmt, NULL) == SQLITE_OK) {
+      while (sqlite3_step(col_stmt) == SQLITE_ROW) {
+        const char *name = (const char *) sqlite3_column_text(col_stmt, 1);
+        if (name && strcmp(name, "lifetime") == 0) {
+          has_lifetime = true;
+        }
+        if (name && strcmp(name, "last_applied_at") == 0) {
+          has_last_applied = true;
+        }
+        if (name && strcmp(name, "rotation_state") == 0) {
+          has_rotation_state = true;
+        }
+        if (name && strcmp(name, "xor_key_pending") == 0) {
+          has_xor_key_pending = true;
+        }
+      }
+    }
+    sqlite3_finalize(col_stmt);
+
+    if (!has_lifetime) {
+      if (migrate_add_column(db->conn, migrate_lifetime, "migrate(lifetime)") != SQLITE_OK) goto err_cleanup;
+    }
+
+    if (!has_last_applied) {
+      if (migrate_add_column(db->conn, migrate_last_applied, "migrate(last_applied_at)") != SQLITE_OK) goto err_cleanup;
+
+      SQLITE_TRY(sqlite3_exec(db->conn,
+                               "UPDATE nodes SET last_applied_at = last_updated"
+                               " WHERE last_applied_at = 0 AND last_updated > 0;",
+                               NULL, NULL, &errmsg), db->conn, "backfill(last_applied_at)");
+      sqlite3_free(errmsg);
+      errmsg = NULL;
+    }
+
+    if (!has_rotation_state) {
+      if (migrate_add_column(db->conn, migrate_rotation_state, "migrate(rotation_state)") != SQLITE_OK) goto err_cleanup;
+    }
+
+    if (!has_xor_key_pending) {
+      if (migrate_add_column(db->conn, migrate_xor_key_pending, "migrate(xor_key_pending)") != SQLITE_OK) goto err_cleanup;
+    }
+  }
+
   err = 0;
 err_cleanup:
   sqlite3_free(errmsg);
@@ -181,14 +278,15 @@ void tumgrd_db_close(struct tumgrd_db *db) {
   db->path[0] = '\0';
 }
 
-int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) {
+int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node, bool set_lifetime) {
   static const char *sql = "INSERT INTO nodes ("
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status, xor_key"
+                           " last_updated, status, xor_key, lifetime,"
+                           " last_applied_at, rotation_state, xor_key_pending"
                            ") VALUES ("
-                           " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
+                           " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
                            ") "
                            "ON CONFLICT(server_host, server_port, uid, ip_version) DO UPDATE SET "
                            " description=excluded.description,"
@@ -201,7 +299,8 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
                            " current_ip=excluded.current_ip,"
                            " last_updated=excluded.last_updated,"
                            " status=excluded.status,"
-                           " xor_key=excluded.xor_key;";
+                           " lifetime=COALESCE(excluded.lifetime, nodes.lifetime),"
+                           " xor_key=CASE WHEN nodes.rotation_state != 0 THEN nodes.xor_key ELSE excluded.xor_key END;";
 
   sqlite3_stmt      *stmt = NULL;
   struct tumgrd_node n;
@@ -249,6 +348,11 @@ int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node) 
   SQLITE_TRY(sqlite3_bind_int64(stmt, 13, (sqlite3_int64) n.last_updated), conn, "bind(last_updated)");
   SQLITE_TRY(bind_text_or_null(stmt, 14, nonempty_or_null(n.status)), conn, "bind(status)");
   SQLITE_TRY(bind_text_or_null(stmt, 15, nonempty_or_null(n.xor_key)), conn, "bind(xor_key)");
+  SQLITE_TRY(set_lifetime ? sqlite3_bind_int64(stmt, 16, (sqlite3_int64) n.lifetime) : sqlite3_bind_null(stmt, 16),
+             conn, "bind(lifetime)");
+  SQLITE_TRY(sqlite3_bind_int64(stmt, 17, (sqlite3_int64) n.last_applied_at), conn, "bind(last_applied_at)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 18, n.rotation_state), conn, "bind(rotation_state)");
+  SQLITE_TRY(bind_text_or_null(stmt, 19, nonempty_or_null(n.xor_key_pending)), conn, "bind(xor_key_pending)");
   SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(upsert)");
   err = 0;
 err_cleanup:
@@ -268,7 +372,8 @@ int tumgrd_db_get_node(struct tumgrd_db *db, const char *server_host, int server
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status, xor_key"
+                           " last_updated, status, xor_key, lifetime,"
+                           " last_applied_at, rotation_state, xor_key_pending"
                            " FROM nodes"
                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
                            " LIMIT 1;";
@@ -346,7 +451,8 @@ int tumgrd_db_list_nodes(struct tumgrd_db *db, struct tumgrd_node **nodes, size_
                            " uid, description, client_comment, created_at,"
                            " server_host, server_port, psk, client_port,"
                            " memlimit, ip_check_url, ip_version, current_ip,"
-                           " last_updated, status, xor_key"
+                           " last_updated, status, xor_key, lifetime,"
+                           " last_applied_at, rotation_state, xor_key_pending"
                            " FROM nodes"
                            " ORDER BY server_host, server_port, uid;";
 
@@ -414,7 +520,7 @@ void tumgrd_db_free_nodes(struct tumgrd_node *nodes) {
 }
 
 int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
-                             const char *ip_version, const char *current_ip, const char *status, int64_t last_updated) {
+                              const char *ip_version, const char *current_ip, const char *status, int64_t last_updated) {
   sqlite3_stmt      *stmt = NULL;
   int                err  = -1;
   static const char *sql  = "UPDATE nodes"
@@ -443,6 +549,234 @@ int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int 
     log_warn("[db] update_runtime affected 0 rows: host=%s port=%d uid=%s ip_version=%s", server_host, server_port, uid,
              ip_version);
   }
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_update_applied(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version, int64_t last_applied_at) {
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET last_applied_at = ?"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(update_applied)");
+  SQLITE_TRY(sqlite3_bind_int64(stmt, 1, last_applied_at), conn, "bind(last_applied_at)");
+  SQLITE_TRY(bind_required_text(stmt, 2, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 3, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 4, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 5, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(update_applied)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] update_applied affected %d rows (expected 1): host=%s port=%d uid=%s", sqlite3_changes(conn),
+              server_host, server_port, uid);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_begin_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version, const char *new_xor_key, int rotation_state, int64_t now) {
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET xor_key = ?, xor_key_pending = ?, rotation_state = ?, last_updated = ?"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
+                            " AND rotation_state = 0;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version || !new_xor_key) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(begin_rotation)");
+  SQLITE_TRY(bind_required_text(stmt, 1, new_xor_key), conn, "bind(xor_key)");
+  SQLITE_TRY(bind_required_text(stmt, 2, new_xor_key), conn, "bind(xor_key_pending)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 3, rotation_state), conn, "bind(rotation_state)");
+  SQLITE_TRY(sqlite3_bind_int64(stmt, 4, now), conn, "bind(last_updated)");
+  SQLITE_TRY(bind_required_text(stmt, 5, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 6, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 7, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 8, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(begin_rotation)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] begin_rotation affected %d rows (expected 1): host=%s port=%d uid=%s", sqlite3_changes(conn),
+              server_host, server_port, uid);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_complete_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                 const char *ip_version, int64_t last_applied_at) {
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET rotation_state = 0, xor_key_pending = '', last_applied_at = ?"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
+                            " AND rotation_state != 0;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(complete_rotation)");
+  SQLITE_TRY(sqlite3_bind_int64(stmt, 1, last_applied_at), conn, "bind(last_applied_at)");
+  SQLITE_TRY(bind_required_text(stmt, 2, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 3, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 4, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 5, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(complete_rotation)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] complete_rotation affected %d rows (expected 1): host=%s port=%d uid=%s", sqlite3_changes(conn),
+              server_host, server_port, uid);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_update_rotation_state(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                     const char *ip_version, int rotation_state) {
+  /* Transitions between pending states only (e.g. PENDING_REMOTE -> PENDING_LOCAL_RECOVERY).
+   * Does not modify xor_key_pending. Use tumgrd_db_clear_rotation() to transition to NONE. */
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET rotation_state = ?"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(update_rotation_state)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 1, rotation_state), conn, "bind(rotation_state)");
+  SQLITE_TRY(bind_required_text(stmt, 2, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 3, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 4, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 5, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(update_rotation_state)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] update_rotation_state affected %d rows (expected 1): host=%s port=%d uid=%s state=%d",
+              sqlite3_changes(conn), server_host, server_port, uid, rotation_state);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_replace_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                const char *ip_version, const char *new_xor_key, int64_t now) {
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET xor_key = ?, xor_key_pending = ?, rotation_state = ?, last_updated = ?"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version || !new_xor_key) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(replace_rotation)");
+  SQLITE_TRY(bind_required_text(stmt, 1, new_xor_key), conn, "bind(xor_key)");
+  SQLITE_TRY(bind_required_text(stmt, 2, new_xor_key), conn, "bind(xor_key_pending)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 3, TUMGRD_ROTATION_PENDING_REMOTE), conn, "bind(rotation_state)");
+  SQLITE_TRY(sqlite3_bind_int64(stmt, 4, now), conn, "bind(last_updated)");
+  SQLITE_TRY(bind_required_text(stmt, 5, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 6, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 7, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 8, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(replace_rotation)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] replace_rotation affected %d rows (expected 1): host=%s port=%d uid=%s", sqlite3_changes(conn),
+              server_host, server_port, uid);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
+
+err_cleanup:
+  if (stmt)
+    sqlite3_finalize(stmt);
+  return err;
+}
+
+int tumgrd_db_clear_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version) {
+  /* Atomically resets to NONE and clears xor_key_pending.
+   * Use for corruption self-heal (without XOR) or non-XOR reset.
+   * For corruption WITH XOR, use tumgrd_db_replace_rotation() instead. */
+  sqlite3_stmt      *stmt = NULL;
+  int                err  = -1;
+  static const char *sql  = "UPDATE nodes"
+                            " SET rotation_state = 0, xor_key_pending = ''"
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
+
+  if (!db || !db->conn || !server_host || !uid || !ip_version) {
+    goto err_cleanup;
+  }
+
+  sqlite3 *conn = db->conn;
+
+  SQLITE_TRY(sqlite3_prepare_v2(conn, sql, -1, &stmt, NULL), conn, "prepare(clear_rotation)");
+  SQLITE_TRY(bind_required_text(stmt, 1, server_host), conn, "bind(server_host)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 2, server_port), conn, "bind(server_port)");
+  SQLITE_TRY(bind_required_text(stmt, 3, uid), conn, "bind(uid)");
+  SQLITE_TRY(bind_required_text(stmt, 4, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(clear_rotation)");
+
+  if (sqlite3_changes(conn) != 1) {
+    log_error("[db] clear_rotation affected %d rows (expected 1): host=%s port=%d uid=%s", sqlite3_changes(conn),
+              server_host, server_port, uid);
+    err = -1;
+    goto err_cleanup;
+  }
+  err = 0;
 
 err_cleanup:
   if (stmt)

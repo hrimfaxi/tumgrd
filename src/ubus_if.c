@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 static int normalize_ip_version(const char *in, char *out, size_t out_len) {
   if (!out || out_len == 0)
@@ -114,6 +115,18 @@ static void add_node_brief(struct blob_buf *b, const struct tumgrd_node *n) {
   if (n->xor_key[0]) {
     blobmsg_add_string(b, "xor", n->xor_key);
   }
+
+  blobmsg_add_u64(b, "lifetime", (uint64_t) n->lifetime);
+  if (n->lifetime > 0 && n->last_applied_at > 1 && n->last_applied_at <= INT64_MAX - n->lifetime) {
+    blobmsg_add_u64(b, "expires_at", (uint64_t) (n->last_applied_at + n->lifetime));
+  }
+
+  if (n->rotation_state != TUMGRD_ROTATION_NONE) {
+    blobmsg_add_u32(b, "rotation_state", (uint32_t) n->rotation_state);
+    if (n->xor_key_pending[0]) {
+      blobmsg_add_string(b, "xor_key_pending", n->xor_key_pending);
+    }
+  }
 }
 
 /*
@@ -159,6 +172,7 @@ enum {
   REG_IP_CHECK_URL,
   REG_IP_VERSION,
   REG_XOR_KEY,
+  REG_LIFETIME,
   __REG_MAX
 };
 
@@ -174,6 +188,7 @@ static const struct blobmsg_policy reg_policy[__REG_MAX] = {
   [REG_IP_CHECK_URL]   = {.name = "ip_check_url", .type = BLOBMSG_TYPE_STRING},
   [REG_IP_VERSION]     = {.name = "ip_version", .type = BLOBMSG_TYPE_STRING},
   [REG_XOR_KEY]        = {.name = "xor", .type = BLOBMSG_TYPE_STRING},
+  [REG_LIFETIME]       = {.name = "lifetime", .type = BLOBMSG_TYPE_INT32},
 };
 
 static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, struct ubus_request_data *req, const char *method,
@@ -185,6 +200,8 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
   const char        *action;
   int                err;
   struct blob_buf    b = {0};
+  bool               set_lifetime = false;
+  int64_t            lt_value = 0;
 
   (void) method;
   struct tumgrd_ctx *tctx = container_of(obj, struct tumgrd_ctx, ubus_obj);
@@ -228,7 +245,11 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     node   = old_node;
     action = "updated";
   } else if (get_rc == 1) {
+    int64_t now = (int64_t) time(NULL);
     action = "created";
+    set_lifetime = true;
+    node.lifetime = tctx->cfg.default_lifetime;
+    node.last_applied_at = (now >= TUMGRD_MIN_SANE_TIME) ? now : 0;
   } else {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }
@@ -286,7 +307,21 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
     snprintf(node.xor_key, sizeof(node.xor_key), "%s", xor_val);
   }
 
-  err = tumgrd_db_upsert_node(&tctx->db, &node);
+  if (tb[REG_LIFETIME]) {
+    set_lifetime = true;
+    lt_value = (int64_t) blobmsg_get_u32(tb[REG_LIFETIME]);
+    if (lt_value != 0 && lt_value < TUMGRD_LIFETIME_MIN) {
+      log_error("[register] lifetime must be 0 (disabled) or >= %d: %lld", TUMGRD_LIFETIME_MIN, (long long) lt_value);
+      return UBUS_STATUS_INVALID_ARGUMENT;
+    }
+    if (lt_value > TUMGRD_LIFETIME_MAX) {
+      log_error("[register] lifetime too large (max %d): %lld", TUMGRD_LIFETIME_MAX, (long long) lt_value);
+      return UBUS_STATUS_INVALID_ARGUMENT;
+    }
+    node.lifetime = lt_value;
+  }
+
+  err = tumgrd_db_upsert_node(&tctx->db, &node, false);
   if (err != 0) {
     return UBUS_STATUS_UNKNOWN_ERROR;
   }

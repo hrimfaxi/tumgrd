@@ -12,6 +12,7 @@
   } while (0);
 
 int         parse_interval(const char *s, uint32_t *out);
+int         parse_lifetime(const char *s, int64_t *out);
 bool        streqcase(const char *a, const char *b);
 bool        streq(const char *a, const char *b);
 void        trim_inplace(char *s);

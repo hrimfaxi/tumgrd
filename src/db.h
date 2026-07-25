@@ -28,6 +28,10 @@ struct tumgrd_node {
   int64_t last_updated;
   char    status[32];
   char    xor_key[129];
+  int64_t lifetime;
+  int64_t last_applied_at;
+  int     rotation_state;
+  char    xor_key_pending[129];
 };
 
 struct tumgrd_db {
@@ -43,13 +47,22 @@ struct tumgrd_config {
   bool        enable_xor;
   bool        use_client_ip;
   int         fwmark;
+  int64_t     default_lifetime;
 };
+
+#define TUMGRD_ROTATION_NONE                 0
+#define TUMGRD_ROTATION_PENDING_REMOTE       1
+#define TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY 2
+
+#define TUMGRD_LIFETIME_MIN     60
+#define TUMGRD_LIFETIME_MAX     INT32_MAX
+#define TUMGRD_MIN_SANE_TIME    1600000000
 
 int  tumgrd_db_open(struct tumgrd_db *db, const char *path);
 int  tumgrd_db_init_schema(struct tumgrd_db *db);
 void tumgrd_db_close(struct tumgrd_db *db);
 
-int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node);
+int tumgrd_db_upsert_node(struct tumgrd_db *db, const struct tumgrd_node *node, bool set_lifetime);
 
 /*
  * 返回 0 表示成功，节点写入 *out
@@ -73,5 +86,23 @@ void tumgrd_db_free_nodes(struct tumgrd_node *nodes);
 
 int tumgrd_db_update_runtime(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
                              const char *ip_version, const char *current_ip, const char *status, int64_t last_updated);
+
+int tumgrd_db_update_applied(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version, int64_t last_applied_at);
+
+int tumgrd_db_begin_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version, const char *new_xor_key, int rotation_state, int64_t now);
+
+int tumgrd_db_complete_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                 const char *ip_version, int64_t last_applied_at);
+
+int tumgrd_db_update_rotation_state(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                     const char *ip_version, int rotation_state);
+
+int tumgrd_db_clear_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                              const char *ip_version);
+
+int tumgrd_db_replace_rotation(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
+                                const char *ip_version, const char *new_xor_key, int64_t now);
 
 // vim :set sw=2 ts=2 et:
