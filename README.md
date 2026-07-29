@@ -90,17 +90,15 @@ Within the same remote server and IP protocol family, `client_port` must be uniq
 
 ```mermaid
 flowchart TD
-    START["Trigger reconcile<br/>startup / periodic check / WAN ifup<br/>register / refresh"] --> SYNC["Node state set to syncing"]
+    START["Trigger reconcile<br/>startup / periodic check / WAN ifup<br/>register / refresh"] --> CHECK["Detect current WAN public IP"]
 
-    SYNC --> CHECK["Detect current WAN public IP"]
     CHECK --> DETECT{"IP detection successful?"}
 
     DETECT -- No --> ERROR1["Record detection failure<br/>Node state set to error"]
 
     DETECT -- Yes --> DECIDE{"Need to reapply config?<br/>force or IP changed<br/>or previous state was error"}
 
-    DECIDE -- No --> KEEP["Keep current tunnel config"]
-    KEEP --> ACTIVE1["Node state set to active"]
+    DECIDE -- No --> SKIP["Skip, keep current config"]
 
     DECIDE -- Yes --> SERVER["Call tuctl_client<br/>server-add"]
     SERVER --> LOCAL_DEL["Call ktuctl<br/>client-del to clean old connection"]
@@ -109,7 +107,7 @@ flowchart TD
     LOCAL_ADD --> RESULT{"All operations successful?"}
 
     RESULT -- Yes --> SAVE["Save current public IP"]
-    SAVE --> ACTIVE2["Node state set to active"]
+    SAVE --> ACTIVE["Node state set to active"]
 
     RESULT -- No --> ERROR2["Record sync error<br/>Node state set to error"]
 
@@ -158,17 +156,16 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> syncing: Start reconcile
-    syncing --> active: IP detection and config application successful
-    syncing --> error: Detection or config failed
-    active --> syncing: Periodic check / IP change / forced refresh
-    error --> syncing: Auto retry in next cycle / manual refresh
+    [*] --> active: Registration successful
+    active --> active: Periodic check (IP unchanged)
+    active --> error: Detection or config failed
+    error --> active: Retry successful
+    error --> error: Retry still failing
 ```
 
 | State | Meaning |
 |---|---|
 | `active` | Node's last sync was successful; local and remote configurations should be in normal state. |
-| `syncing` | Currently detecting IP or executing remote/local tunnel configuration. |
 | `error` | Last sync failed; will automatically attempt recovery in the next periodic check. |
 
 ## Public IP Detection

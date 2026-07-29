@@ -153,38 +153,36 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, const struct tumgrd_config *cfg, 
            node->uid, node->server_host, node->server_port, node->client_port, force ? 1 : 0, node->current_ip,
            node->ip_version, expired ? 1 : 0, node->rotation_state);
 
-  try2(mark_runtime(db, node, node->current_ip, TUMGRD_STATUS_SYNCING, now), "[reconcile] failed to mark syncing uid=%s",
-       node->uid);
   try2(detect_public_ip(pick_ip_check_url(node), node->ip_version, detected_ip, sizeof(detected_ip)),
        "[reconcile] detect ip failed uid=%s", node->uid);
 
   ip_changed = !streqcase(node->current_ip, detected_ip);
-  was_error  = streq(node->status, TUMGRD_STATUS_ERROR);
+  was_error  = streq(node->status, TUMGRD_STATUS_ERROR) || streq(node->status, TUMGRD_STATUS_SYNCING);
   need_apply = force || ip_changed || was_error;
 
   log_info("[reconcile] uid=%s detected_ip=%s old_ip=%s ip_changed=%d was_error=%d need_apply=%d", node->uid, detected_ip,
            node->current_ip, ip_changed ? 1 : 0, was_error ? 1 : 0, need_apply ? 1 : 0);
 
-  if (need_apply) {
-    try2(tumgrd_runner_server_add(node, cfg, detected_ip), "[reconcile] server-add failed uid=%s ip=%s", node->uid,
-         detected_ip);
-    server_apply_succeeded = true;
-
-    if (node->rotation_state == TUMGRD_ROTATION_PENDING_REMOTE) {
-      if (tumgrd_db_update_rotation_state(db, node->server_host, node->server_port, node->uid, node->ip_version,
-                                           TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) != 0) {
-        log_error("[reconcile] failed to update rotation state to PENDING_LOCAL_RECOVERY uid=%s", node->uid);
-        err = -1;
-        goto err_cleanup;
-      }
-      node->rotation_state = TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY;
-      log_info("[reconcile] server_add confirmed, pending local recovery uid=%s", node->uid);
-    }
-
-    try2(tumgrd_runner_reset_local_client(node), "[reconcile] reset local client failed uid=%s", node->uid);
-  } else {
-    log_info("[reconcile] skip apply uid=%s ip unchanged and force=0", node->uid);
+  if (!need_apply) {
+    log_info("[reconcile] skip uid=%s - ip unchanged, not forced, no error", node->uid);
+    return 0;
   }
+
+  try2(tumgrd_runner_server_add(node, cfg, detected_ip), "[reconcile] server-add failed uid=%s ip=%s", node->uid, detected_ip);
+  server_apply_succeeded = true;
+
+  if (node->rotation_state == TUMGRD_ROTATION_PENDING_REMOTE) {
+    if (tumgrd_db_update_rotation_state(db, node->server_host, node->server_port, node->uid, node->ip_version,
+                                         TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) != 0) {
+      log_error("[reconcile] failed to update rotation state to PENDING_LOCAL_RECOVERY uid=%s", node->uid);
+      err = -1;
+      goto err_cleanup;
+    }
+    node->rotation_state = TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY;
+    log_info("[reconcile] server_add confirmed, pending local recovery uid=%s", node->uid);
+  }
+
+  try2(tumgrd_runner_reset_local_client(node), "[reconcile] reset local client failed uid=%s", node->uid);
 
   try2(mark_runtime(db, node, detected_ip, TUMGRD_STATUS_ACTIVE, now_unix()), "[reconcile] update runtime failed uid=%s ip=%s",
        node->uid, detected_ip);

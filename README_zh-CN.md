@@ -90,17 +90,15 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    START["触发 reconcile<br/>启动 / 定时检查 / WAN ifup<br/>register / refresh"] --> SYNC["节点状态设为 syncing"]
+    START["触发 reconcile<br/>启动 / 定时检查 / WAN ifup<br/>register / refresh"] --> CHECK["检测当前 WAN 公网 IP"]
 
-    SYNC --> CHECK["检测当前 WAN 公网 IP"]
     CHECK --> DETECT{"IP 检测成功？"}
 
     DETECT -- 否 --> ERROR1["记录检测失败<br/>节点状态设为 error"]
 
     DETECT -- 是 --> DECIDE{"需要重新应用配置？<br/>force 或 IP 已变化<br/>或此前状态为 error"}
 
-    DECIDE -- 否 --> KEEP["保持当前隧道配置"]
-    KEEP --> ACTIVE1["节点状态设为 active"]
+    DECIDE -- 否 --> SKIP["跳过，保持当前配置"]
 
     DECIDE -- 是 --> SERVER["调用 tuctl_client<br/>server-add"]
     SERVER --> LOCAL_DEL["调用 ktuctl<br/>client-del 清理旧连接"]
@@ -109,7 +107,7 @@ flowchart TD
     LOCAL_ADD --> RESULT{"全部操作成功？"}
 
     RESULT -- 是 --> SAVE["保存当前公网 IP"]
-    SAVE --> ACTIVE2["节点状态设为 active"]
+    SAVE --> ACTIVE["节点状态设为 active"]
 
     RESULT -- 否 --> ERROR2["记录同步错误<br/>节点状态设为 error"]
 
@@ -158,17 +156,16 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> syncing: 开始 reconcile
-    syncing --> active: IP 检测与配置应用成功
-    syncing --> error: 检测或配置失败
-    active --> syncing: 定时检查 / IP 变化 / 强制刷新
-    error --> syncing: 下周期自动重试 / 手动刷新
+    [*] --> active: 注册成功
+    active --> active: 定时检查（IP 未变化）
+    active --> error: 检测或配置失败
+    error --> active: 重试成功
+    error --> error: 重试仍失败
 ```
 
 | 状态 | 含义 |
 |---|---|
 | `active` | 节点最近一次同步成功，本地与远程配置应处于正常状态。 |
-| `syncing` | 正在检测 IP 或执行远程、本地隧道配置。 |
 | `error` | 上一次同步失败；下一轮周期检查会自动尝试恢复。 |
 
 ## 公网 IP 检测

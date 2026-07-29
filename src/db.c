@@ -130,6 +130,17 @@ static int row_to_node(sqlite3_stmt *stmt, struct tumgrd_node *node) {
   return 0;
 }
 
+#define JOURNAL_MODE_LEN 16
+
+static int wal_mode_cb(void *data, int ncols, char **vals, char **colnames) {
+  (void) ncols;
+  (void) colnames;
+  if (data && vals && vals[0]) {
+    copy_string((char *) data, JOURNAL_MODE_LEN, vals[0]);
+  }
+  return 0;
+}
+
 int tumgrd_db_open(struct tumgrd_db *db, const char *path) {
   int         err = -1;
   const char *db_path;
@@ -146,6 +157,20 @@ int tumgrd_db_open(struct tumgrd_db *db, const char *path) {
   SQLITE_TRY(sqlite3_open_v2(db->path, &conn, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL), conn, "open_v2");
   db->conn = conn;
   sqlite3_busy_timeout(db->conn, 3000);
+
+  char journal_mode[JOURNAL_MODE_LEN] = {0};
+  sqlite3_exec(conn, "PRAGMA journal_mode=WAL;", wal_mode_cb, journal_mode, NULL);
+  log_info("[db] journal_mode=%s", journal_mode[0] ? journal_mode : "unknown");
+
+  if (streq(journal_mode, "wal")) {
+    sqlite3_exec(conn, "PRAGMA synchronous=NORMAL;", NULL, NULL, NULL);
+  } else {
+    log_warn("[db] WAL not available, falling back to synchronous=FULL");
+    sqlite3_exec(conn, "PRAGMA synchronous=FULL;", NULL, NULL, NULL);
+  }
+
+  sqlite3_exec(conn, "PRAGMA cache_size=-2000;", NULL, NULL, NULL);
+
   err = 0;
 
 err_cleanup:
