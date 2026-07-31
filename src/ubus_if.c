@@ -509,6 +509,18 @@ static int handle_refresh(struct ubus_context *ctx, struct ubus_object *obj, str
 
     err = tumgrd_reconcile_one(&tctx->db, &tctx->cfg, &node, is_force);
 
+    /* Re-fetch from DB: reconcile may have updated current_ip/status/rotation */
+    {
+      struct tumgrd_node updated_node = {};
+
+      int get_rc = tumgrd_db_get_node(&tctx->db, node.server_host, node.server_port, node.uid, node.ip_version, &updated_node);
+      if (get_rc == 0) {
+        node = updated_node;
+      } else {
+        log_warn("[refresh] failed to fetch node after reconcile: rc=%d", get_rc);
+      }
+    }
+
     blobmsg_add_string(&b, "status", err == 0 ? "ok" : "error");
     blobmsg_add_string(&b, "scope", "one");
     blobmsg_add_u8(&b, "force", is_force ? 1 : 0);
