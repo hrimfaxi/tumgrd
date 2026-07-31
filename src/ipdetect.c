@@ -525,11 +525,12 @@ int detect_public_ip(const char *url, const char *ip_version, char *out, size_t 
   }
 
   /*
-   * 如果是 IPv6 请求且没有指定外部检测 URL，
+   * 如果是 IPv6 请求且检测目标就是默认服务（url 为空或解析后 host 为默认 host，
+   * 容忍尾斜杠/大小写/显式默认端口等变体），
    * 优先使用本地连接探测方法（无需外部 HTTP 服务）
    */
   int family = ip_family_from_version(ip_version);
-  if (family == 6 && (!url || url[0] == '\0' || streq(url, TUMGRD_DEFAULT_IP_CHECK_URL))) {
+  if (family == 6 && streqcase(host, TUMGRD_DEFAULT_IP_CHECK_HOST)) {
     err = detect_ipv6_wan_by_connect("ipv6.baidu.com", 80, out, out_len);
     if (err == 0) {
       return 0;
