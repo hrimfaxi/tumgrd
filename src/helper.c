@@ -291,11 +291,14 @@ int generate_random_hex_key(char *out, size_t out_size, size_t key_bytes) {
   size_t total = 0;
   while (total < key_bytes) {
     ssize_t n = read(fd, buf + total, key_bytes - total);
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
     if (n <= 0) {
       close(fd);
       return -1;
     }
-    total += n;
+    total += (size_t) n;
   }
   close(fd);
 

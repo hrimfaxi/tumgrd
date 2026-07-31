@@ -173,7 +173,7 @@ int tumgrd_reconcile_one(struct tumgrd_db *db, const struct tumgrd_config *cfg, 
 
   if (node->rotation_state == TUMGRD_ROTATION_PENDING_REMOTE) {
     if (tumgrd_db_update_rotation_state(db, node->server_host, node->server_port, node->uid, node->ip_version,
-                                         TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) != 0) {
+                                        TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) != 0) {
       log_error("[reconcile] failed to update rotation state to PENDING_LOCAL_RECOVERY uid=%s", node->uid);
       err = -1;
       goto err_cleanup;
