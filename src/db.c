@@ -224,8 +224,9 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
   static const char *migrate_rotation_state  = "ALTER TABLE nodes ADD COLUMN rotation_state INTEGER DEFAULT 0;";
   static const char *migrate_xor_key_pending = "ALTER TABLE nodes ADD COLUMN xor_key_pending TEXT DEFAULT '';";
 
-  char *errmsg = NULL;
-  int   err    = -1;
+  char         *errmsg   = NULL;
+  sqlite3_stmt *col_stmt = NULL;
+  int           err      = -1;
 
   if (!db || !db->conn) {
     goto err_cleanup;
@@ -236,14 +237,17 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
   errmsg = NULL;
 
   {
-    sqlite3_stmt *col_stmt            = NULL;
-    bool          has_lifetime        = false;
-    bool          has_last_applied    = false;
-    bool          has_rotation_state  = false;
-    bool          has_xor_key_pending = false;
+    bool has_lifetime        = false;
+    bool has_last_applied    = false;
+    bool has_rotation_state  = false;
+    bool has_xor_key_pending = false;
 
-    if (sqlite3_prepare_v2(db->conn, "PRAGMA table_info(nodes);", -1, &col_stmt, NULL) == SQLITE_OK) {
-      while (sqlite3_step(col_stmt) == SQLITE_ROW) {
+    SQLITE_TRY(sqlite3_prepare_v2(db->conn, "PRAGMA table_info(nodes);", -1, &col_stmt, NULL), db->conn, "prepare(table_info)");
+
+    for (;;) {
+      int rc = sqlite3_step(col_stmt);
+
+      if (rc == SQLITE_ROW) {
         const char *name = (const char *) sqlite3_column_text(col_stmt, 1);
         if (name && strcmp(name, "lifetime") == 0) {
           has_lifetime = true;
@@ -257,9 +261,20 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
         if (name && strcmp(name, "xor_key_pending") == 0) {
           has_xor_key_pending = true;
         }
+        continue;
       }
+
+      if (rc == SQLITE_DONE) {
+        break;
+      }
+
+      sqlite_log_error(db->conn, "step(table_info)", rc);
+      err = -1;
+      goto err_cleanup;
     }
+
     sqlite3_finalize(col_stmt);
+    col_stmt = NULL;
 
     if (!has_lifetime) {
       if (migrate_add_column(db->conn, migrate_lifetime, "migrate(lifetime)") != SQLITE_OK)
@@ -292,6 +307,9 @@ int tumgrd_db_init_schema(struct tumgrd_db *db) {
 
   err = 0;
 err_cleanup:
+  if (col_stmt) {
+    sqlite3_finalize(col_stmt);
+  }
   sqlite3_free(errmsg);
   return err;
 }
