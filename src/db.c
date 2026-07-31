@@ -703,14 +703,22 @@ err_cleanup:
 int tumgrd_db_update_rotation_state(struct tumgrd_db *db, const char *server_host, int server_port, const char *uid,
                                     const char *ip_version, int rotation_state) {
   /* Transitions between pending states only (e.g. PENDING_REMOTE -> PENDING_LOCAL_RECOVERY).
-   * Does not modify xor_key_pending. Use tumgrd_db_clear_rotation() to transition to NONE. */
+   * Does not modify xor_key_pending. Use tumgrd_db_clear_rotation() to transition to NONE.
+   * Both source and target must be pending states; any other call fails. */
   sqlite3_stmt      *stmt = NULL;
   int                err  = -1;
   static const char *sql  = "UPDATE nodes"
                             " SET rotation_state = ?"
-                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?;";
+                            " WHERE server_host = ? AND server_port = ? AND uid = ? AND ip_version = ?"
+                            " AND rotation_state IN (?, ?);";
 
   if (!db || !db->conn || !server_host || !uid || !ip_version) {
+    goto err_cleanup;
+  }
+
+  if (rotation_state != TUMGRD_ROTATION_PENDING_REMOTE && rotation_state != TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY) {
+    log_error("[db] update_rotation_state: invalid target state %d (must be pending): host=%s port=%d uid=%s", rotation_state,
+              server_host, server_port, uid);
     goto err_cleanup;
   }
 
@@ -722,6 +730,8 @@ int tumgrd_db_update_rotation_state(struct tumgrd_db *db, const char *server_hos
   SQLITE_TRY(sqlite3_bind_int(stmt, 3, server_port), conn, "bind(server_port)");
   SQLITE_TRY(bind_required_text(stmt, 4, uid), conn, "bind(uid)");
   SQLITE_TRY(bind_required_text(stmt, 5, ip_version), conn, "bind(ip_version)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 6, TUMGRD_ROTATION_PENDING_REMOTE), conn, "bind(old_pending_remote)");
+  SQLITE_TRY(sqlite3_bind_int(stmt, 7, TUMGRD_ROTATION_PENDING_LOCAL_RECOVERY), conn, "bind(old_pending_local_recovery)");
   SQLITE_TRY_STEP_DONE(sqlite3_step(stmt), conn, "step(update_rotation_state)");
 
   if (sqlite3_changes(conn) != 1) {
