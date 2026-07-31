@@ -5,6 +5,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -158,6 +159,9 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
     close(stdin_pipe[1]);
     close(stdout_pipe[0]);
     close(stderr_pipe[0]);
+
+    /* 父进程忽略 SIGPIPE，exec 不会重置被忽略的信号；子进程需恢复默认行为，避免管道破裂时挂住 */
+    signal(SIGPIPE, SIG_DFL);
 
     if (dup2(stdin_pipe[0], STDIN_FILENO) < 0) {
       _exit(127);
