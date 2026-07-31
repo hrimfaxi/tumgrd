@@ -303,6 +303,11 @@ static int handle_register(struct ubus_context *ctx, struct ubus_object *obj, st
       log_error("[register] xor_key contains invalid characters");
       return UBUS_STATUS_INVALID_ARGUMENT;
     }
+    if (node.rotation_state != TUMGRD_ROTATION_NONE) {
+      log_error("[register] cannot override xor while rotation is in progress uid=%s rotation_state=%d", node.uid,
+                node.rotation_state);
+      return UBUS_STATUS_INVALID_ARGUMENT;
+    }
     log_info("Override XOR key for node %s", node.uid);
     snprintf(node.xor_key, sizeof(node.xor_key), "%s", xor_val);
   }
