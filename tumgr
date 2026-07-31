@@ -2,6 +2,7 @@
 
 UBUS_BIN="${UBUS_BIN:-ubus}"
 UBUS_OBJECT="${UBUS_OBJECT:-tumgrd}"
+SOCKET_PATH=""
 
 usage() {
   cat <<'EOF'
@@ -48,7 +49,11 @@ json_escape() {
 ubus_call() {
   method="$1"
   payload="$2"
-  "$UBUS_BIN" call "$UBUS_OBJECT" "$method" "$payload"
+  if [ -n "$SOCKET_PATH" ]; then
+    "$UBUS_BIN" -s "$SOCKET_PATH" call "$UBUS_OBJECT" "$method" "$payload"
+  else
+    "$UBUS_BIN" call "$UBUS_OBJECT" "$method" "$payload"
+  fi
 }
 
 cmd_register() {
@@ -63,7 +68,6 @@ cmd_register() {
   ip_check_url=""
   ip_version=""
   lifetime=""
-  socket_path=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -124,7 +128,7 @@ cmd_register() {
       ;;
     -socket | -s)
       [ $# -ge 2 ] || err "option -socket requires an argument"
-      socket_path="$2"
+      SOCKET_PATH="$2"
       shift 2
       ;;
     -h | --help)
@@ -193,7 +197,6 @@ cmd_deregister() {
   server_host=""
   server_port=""
   ip_version=""
-  socket_path=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -219,7 +222,7 @@ cmd_deregister() {
       ;;
     -socket | -s)
       [ $# -ge 2 ] || err "option -socket requires an argument"
-      socket_path="$2"
+      SOCKET_PATH="$2"
       shift 2
       ;;
     -h | --help)
@@ -255,7 +258,6 @@ cmd_refresh() {
   force="false"
   all="false"
   ip_version=""
-  socket_path=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -289,7 +291,7 @@ cmd_refresh() {
       ;;
     -socket | -s)
       [ $# -ge 2 ] || err "option -socket requires an argument"
-      socket_path="$2"
+      SOCKET_PATH="$2"
       shift 2
       ;;
     -h | --help)
@@ -335,6 +337,11 @@ cmd_status() {
     -json | -j)
       json_output="true"
       shift
+      ;;
+    -socket | -s)
+      [ $# -ge 2 ] || err "option -socket requires an argument"
+      SOCKET_PATH="$2"
+      shift 2
       ;;
     -h | --help)
       usage
@@ -443,13 +450,11 @@ cmd_status() {
 }
 
 cmd_dump() {
-  socket_path=""
-
   while [ $# -gt 0 ]; do
     case "$1" in
     -socket | -s)
       [ $# -ge 2 ] || err "option -socket requires an argument"
-      socket_path="$2"
+      SOCKET_PATH="$2"
       shift 2
       ;;
     -h | --help)
