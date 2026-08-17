@@ -41,7 +41,7 @@ src/
   ubus_if.c     — ubus 对象和方法（register/deregister/refresh/status/dump）
   ipdetect.c    — HTTP 和 TCP 连接方式的公网 IP 检测
   helper.c      — URL 解析、杂项工具函数
-  log_impl.c    — 基于 syslog 的日志实现
+  log_impl.c    — 基于 stderr 的日志实现（由 procd 捕获）
   try.h         — 错误处理宏（见下文）
   tumgrd.h      — 共享上下文结构体、常量、默认 URL
 ```

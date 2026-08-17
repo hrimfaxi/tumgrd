@@ -40,7 +40,7 @@ static void usage(FILE *out, const char *prog) {
           "Options:\n"
           "  -d, --database PATH      sqlite database path (default: %s)\n"
           "  -i, --interval SEC       monitor interval seconds (10-3600) (default: %d)\n"
-          "  -s, --socket PATH        unix socket path (default: %s)\n"
+          "  -s, --socket PATH        unix socket path (default: ubus default socket)\n"
           "      --log-level LEVEL    log level: debug|info|warn|error (default: %s)\n"
           "      --enable-xor         enable automatic XOR key generation for new nodes\n"
           "      --disable-xor        disable automatic XOR key generation (default)\n"
@@ -49,8 +49,7 @@ static void usage(FILE *out, const char *prog) {
           "      --fwmark NUM         SO_MARK value for IP detection (0-255, default: %d)\n"
           "      --lifetime SEC       default node lifetime in seconds (0=disabled, >=60, default: 0)\n"
           "  -h, --help               show this help\n",
-          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, nonempty_or_default(DEFAULT_SOCKET_PATH, "null"), DEFAULT_LOG_LEVEL,
-          TUMGRD_IPDETECT_FWMARK);
+          prog, TUMGRD_DB_PATH, DEFAULT_INTERVAL, DEFAULT_LOG_LEVEL, TUMGRD_IPDETECT_FWMARK);
 }
 
 static int parse_args(int argc, char **argv, struct tumgrd_config *cfg) {

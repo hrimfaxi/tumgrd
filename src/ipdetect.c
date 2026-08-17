@@ -261,6 +261,23 @@ err_cleanup:
 }
 
 /**
+ * 判断 url 是否带显式 scheme（形如 scheme://）。
+ * 仅 http:// 受支持；https 及其它 scheme 一律拒绝，
+ * 无 scheme 的裸主机名（如存量配置 ip.3322.net）按 http 处理。
+ */
+static bool has_url_scheme(const char *url) {
+  const unsigned char *p = (const unsigned char *) url;
+
+  if (!isalpha(*p))
+    return false;
+  p++;
+  while (*p && (isalnum(*p) || *p == '+' || *p == '-' || *p == '.')) {
+    p++;
+  }
+  return strncmp((const char *) p, "://", 3) == 0;
+}
+
+/**
  * 解析 URL，提取 scheme、host、port、path。
  * 仅支持 http 协议，遇到 https 或其他 scheme 返回 -1。
  * 支持 IPv6 字面量 [addr] 格式。
@@ -277,11 +294,14 @@ static int parse_url_host_path(const char *url, char *host, size_t host_size, in
   if (!url || url[0] == '\0')
     return -1;
 
-  /* 检查 scheme */
-  if (strncmp(p, "http://", 7) == 0) {
+  /* 检查 scheme：仅支持 http；https 或其它显式 scheme 一律拒绝 */
+  if (!has_url_scheme(url)) {
+    /* 无 scheme 的裸主机名按 http 处理，兼容存量 ip.3322.net 配置 */
+    log_debug("[ipdetect] URL without scheme, assuming http: %s", url);
+  } else if (strncmp(url, "http://", 7) == 0) {
     p += 7;
-  } else if (strncmp(p, "https://", 8) == 0) {
-    log_error("[ipdetect] HTTPS URL not supported: %s", url);
+  } else {
+    log_error("[ipdetect] unsupported URL scheme: %s (only http:// supported)", url);
     return -1;
   }
 
