@@ -431,13 +431,33 @@ static int http_get_with_mark(const char *host, int port, const char *path, char
   res = NULL;
 
   /* 构造 HTTP 请求 */
+  char host_header[288];
+  int  n_host;
+
+  if (is_ipv6(host)) {
+    if (port != TUMGRD_DEFAULT_IP_CHECK_PORT) {
+      n_host = snprintf(host_header, sizeof(host_header), "[%s]:%d", host, port);
+    } else {
+      n_host = snprintf(host_header, sizeof(host_header), "[%s]", host);
+    }
+  } else if (port != TUMGRD_DEFAULT_IP_CHECK_PORT) {
+    n_host = snprintf(host_header, sizeof(host_header), "%s:%d", host, port);
+  } else {
+    n_host = snprintf(host_header, sizeof(host_header), "%s", host);
+  }
+
+  if (n_host < 0 || (size_t) n_host >= sizeof(host_header)) {
+    log_error("[ipdetect] HTTP Host header too long: [%s]", host_header);
+    goto out;
+  }
+
   int n_req = snprintf(request, sizeof(request),
                        "GET %s HTTP/1.1\r\n"
                        "Host: %s\r\n"
                        "User-Agent: Wget/1.21.4\r\n"
                        "Connection: close\r\n"
                        "\r\n",
-                       path, host);
+                       path, host_header);
   if (n_req < 0 || (size_t) n_req >= sizeof(request)) {
     log_error("[ipdetect] HTTP request too long for %s:%d%s", host, port, path);
     goto out;
