@@ -2,7 +2,7 @@
 
 set -e
 
-export STAGING_DIR=~/temp/openwrt-sdk-25.12.2-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64/staging_dir
+export STAGING_DIR=~/temp/openwrt-sdk-25.12.5-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64/staging_dir
 rm -rf build
 mkdir build
 cmake -DCMAKE_TOOLCHAIN_FILE=$(pwd)/openwrt-aarch64.cmake -B build . \

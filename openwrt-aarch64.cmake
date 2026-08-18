@@ -3,7 +3,7 @@ set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 # ==================== SDK 路径配置 ====================
-set(OPENWRT_SDK_PATH "$ENV{HOME}/temp/openwrt-sdk-25.12.2-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64")
+set(OPENWRT_SDK_PATH "$ENV{HOME}/temp/openwrt-sdk-25.12.5-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64")
 set(TOOLCHAIN_PATH "${OPENWRT_SDK_PATH}/staging_dir/toolchain-aarch64_cortex-a53_gcc-14.3.0_musl/bin")
 set(CMAKE_SYSROOT "${OPENWRT_SDK_PATH}/staging_dir/target-aarch64_cortex-a53_musl")
 
