@@ -5,15 +5,23 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
+#include <spawn.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* glibc 仅在 _DEFAULT_SOURCE 下声明 environ，musl 无条件声明；显式 extern 保证两边一致 */
+extern char **environ;
+
 #define TUMGRD_TUCTL_CLIENT_BIN "tuctl_client"
 #define TUMGRD_KTUCTL_BIN       "ktuctl"
+#define TUMGRD_MEMLIMIT_ENV     "TUTUICMPTUNNEL_PWHASH_MEMLIMIT"
+#define TUMGRD_MEMLIMIT_ENV_EQ  TUMGRD_MEMLIMIT_ENV "="
 
 static void sanitize_comment(const char *src, char *dst, size_t dst_len) {
   size_t i;
@@ -106,14 +114,55 @@ static void log_argv(const char *tag, char *const argv[]) {
   log_debug("%s", buf);
 }
 
+static int set_cloexec(int fd) {
+  int flags = fcntl(fd, F_GETFD);
+
+  if (flags < 0) {
+    return -1;
+  }
+
+  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+}
+
+/* 父进程标准 fd 被关闭时 pipe() 可能返回 0/1/2，adddup2(fd, fd) 会退化；
+ * 把管道端提升到 >=3 并加 FD_CLOEXEC，避免依赖具体 libc 对等 fd 的处理。
+ * F_DUPFD_CLOEXEC 自 Linux 2.6.24 起可用，musl/glibc 均提供该 fcntl 命令。 */
+static int prepare_pipe_end(int *fd) {
+  int newfd;
+
+  if (*fd < STDERR_FILENO + 1) {
+    newfd = fcntl(*fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+    if (newfd < 0) {
+      return -1;
+    }
+    close(*fd);
+    *fd = newfd;
+    return 0;
+  }
+
+  return set_cloexec(*fd);
+}
+
 static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_memlimit, int memlimit, char *stdout_buf,
                            size_t stdout_buf_len, char *stderr_buf, size_t stderr_buf_len) {
-  int   stdin_pipe[2]  = {-1, -1};
-  int   stdout_pipe[2] = {-1, -1};
-  int   stderr_pipe[2] = {-1, -1};
-  pid_t pid;
-  int   status;
-  char  memlimit_env[64];
+  int                        stdin_pipe[2]  = {-1, -1};
+  int                        stdout_pipe[2] = {-1, -1};
+  int                        stderr_pipe[2] = {-1, -1};
+  posix_spawn_file_actions_t fa;
+  posix_spawnattr_t          attr;
+  sigset_t                   sigdef;
+  pid_t                      pid = -1;
+  int                        status;
+  int                        spawn_err;
+  int                        envp_count = 0;
+  int                        i;
+  char                     **envp_storage = NULL;
+  char                      *memlimit_env = NULL;
+  char                     **envp         = environ;
+  char                       memlimit_str[64];
+  bool                       fa_ready   = false;
+  bool                       attr_ready = false;
+  int                        err        = -1;
 
   if (!argv || !argv[0]) {
     return -1;
@@ -126,69 +175,69 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
     stderr_buf[0] = '\0';
   }
 
-  if (pipe(stdin_pipe) != 0) {
-    return -1;
+  /* 管道端提升到 >=3 且带 FD_CLOEXEC。POSIX 规定 file action 按加入顺序执行，
+   * 之后才关闭仍带 FD_CLOEXEC 的 fd：adddup2 先复制到 0/1/2（新 fd 清除
+   * FD_CLOEXEC），原始管道端随后在 exec 时自动关闭，因此无需 addclose。 */
+  try2(pipe(stdin_pipe), "pipe stdin failed: %s", strerrno);
+  try2(prepare_pipe_end(&stdin_pipe[0]), "prepare stdin_pipe[0] failed: %s", strerrno);
+  try2(prepare_pipe_end(&stdin_pipe[1]), "prepare stdin_pipe[1] failed: %s", strerrno);
+  try2(pipe(stdout_pipe), "pipe stdout failed: %s", strerrno);
+  try2(prepare_pipe_end(&stdout_pipe[0]), "prepare stdout_pipe[0] failed: %s", strerrno);
+  try2(prepare_pipe_end(&stdout_pipe[1]), "prepare stdout_pipe[1] failed: %s", strerrno);
+  try2(pipe(stderr_pipe), "pipe stderr failed: %s", strerrno);
+  try2(prepare_pipe_end(&stderr_pipe[0]), "prepare stderr_pipe[0] failed: %s", strerrno);
+  try2(prepare_pipe_end(&stderr_pipe[1]), "prepare stderr_pipe[1] failed: %s", strerrno);
+
+  /* posix_spawn 系列失败返回正错误码，取负匹配 try2 的 <0 约定 */
+  try2(-posix_spawn_file_actions_init(&fa), "posix_spawn_file_actions_init failed: %s", strret);
+  fa_ready = true;
+  try2(-posix_spawn_file_actions_adddup2(&fa, stdin_pipe[0], STDIN_FILENO), "adddup2 stdin failed: %s", strret);
+  try2(-posix_spawn_file_actions_adddup2(&fa, stdout_pipe[1], STDOUT_FILENO), "adddup2 stdout failed: %s", strret);
+  try2(-posix_spawn_file_actions_adddup2(&fa, stderr_pipe[1], STDERR_FILENO), "adddup2 stderr failed: %s", strret);
+
+  try2(-posix_spawnattr_init(&attr), "posix_spawnattr_init failed: %s", strret);
+  attr_ready = true;
+  sigemptyset(&sigdef);
+  sigaddset(&sigdef, SIGPIPE);
+  /* 父进程忽略 SIGPIPE，exec 不重置被忽略的信号；用 SETSIGDEF 让子进程恢复默认行为 */
+  try2(-posix_spawnattr_setsigdefault(&attr, &sigdef), "setsigdefault failed: %s", strret);
+  try2(-posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGDEF), "setflags failed: %s", strret);
+
+  /* posix_spawn 没有子进程代码可跑，环境变量需显式构造（父进程环境 + memlimit）。
+   * 过滤父环境中已有的同名变量，等价于旧的 setenv(..., overwrite=1)。 */
+  if (has_memlimit) {
+    size_t prefix_len = strlen(TUMGRD_MEMLIMIT_ENV_EQ);
+    int    out        = 0;
+
+    while (environ[envp_count]) {
+      envp_count++;
+    }
+    envp_storage = calloc((size_t) envp_count + 2, sizeof(char *));
+    try2_p(envp_storage, "calloc envp failed");
+    for (i = 0; i < envp_count; i++) {
+      if (strncmp(environ[i], TUMGRD_MEMLIMIT_ENV_EQ, prefix_len) != 0) {
+        envp_storage[out++] = environ[i];
+      }
+    }
+    snprintf(memlimit_str, sizeof(memlimit_str), TUMGRD_MEMLIMIT_ENV_EQ "%u", (unsigned int) memlimit);
+    memlimit_env = strdup(memlimit_str);
+    try2_p(memlimit_env, "strdup memlimit env failed");
+    envp_storage[out++] = memlimit_env;
+    envp_storage[out]   = NULL;
+    envp                = envp_storage;
   }
 
-  if (pipe(stdout_pipe) != 0) {
-    close(stdin_pipe[0]);
-    close(stdin_pipe[1]);
-    return -1;
-  }
-
-  if (pipe(stderr_pipe) != 0) {
-    close(stdin_pipe[0]);
-    close(stdin_pipe[1]);
-    close(stdout_pipe[0]);
-    close(stdout_pipe[1]);
-    return -1;
-  }
-
-  pid = fork();
-  if (pid < 0) {
-    close(stdin_pipe[0]);
-    close(stdin_pipe[1]);
-    close(stdout_pipe[0]);
-    close(stdout_pipe[1]);
-    close(stderr_pipe[0]);
-    close(stderr_pipe[1]);
-    return -1;
-  }
-
-  if (pid == 0) {
-    close(stdin_pipe[1]);
-    close(stdout_pipe[0]);
-    close(stderr_pipe[0]);
-
-    /* 父进程忽略 SIGPIPE，exec 不会重置被忽略的信号；子进程需恢复默认行为，避免管道破裂时挂住 */
-    signal(SIGPIPE, SIG_DFL);
-
-    if (dup2(stdin_pipe[0], STDIN_FILENO) < 0) {
-      _exit(127);
-    }
-    if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0) {
-      _exit(127);
-    }
-    if (dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
-      _exit(127);
-    }
-
-    close(stdin_pipe[0]);
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
-
-    if (has_memlimit) {
-      snprintf(memlimit_env, sizeof(memlimit_env), "%d", memlimit);
-      setenv("TUTUICMPTUNNEL_PWHASH_MEMLIMIT", memlimit_env, 1);
-    }
-
-    execvp(argv[0], argv);
-    _exit(127);
+  spawn_err = posix_spawnp(&pid, argv[0], &fa, &attr, argv, envp);
+  if (spawn_err != 0) {
+    err_cleanup(-1, "posix_spawnp %s failed: %s", argv[0], strerror(spawn_err));
   }
 
   close(stdin_pipe[0]);
   close(stdout_pipe[1]);
   close(stderr_pipe[1]);
+  stdin_pipe[0]  = -1;
+  stdout_pipe[1] = -1;
+  stderr_pipe[1] = -1;
 
   if (stdin_data && stdin_data[0] != '\0') {
     size_t total   = strlen(stdin_data);
@@ -206,22 +255,23 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
     }
   }
   close(stdin_pipe[1]);
+  stdin_pipe[1] = -1;
 
   if (stdout_buf && stdout_buf_len > 0) {
     if (read_all_fd(stdout_pipe[0], stdout_buf, stdout_buf_len) != 0) {
-      char errbuf[64];
-      log_warn("[runner] failed to read stdout from %s: %s", argv[0], strerror_r(errno, errbuf, sizeof(errbuf)));
+      log_warn("[runner] failed to read stdout from %s: %s", argv[0], strerror(errno));
     }
   }
   close(stdout_pipe[0]);
+  stdout_pipe[0] = -1;
 
   if (stderr_buf && stderr_buf_len > 0) {
     if (read_all_fd(stderr_pipe[0], stderr_buf, stderr_buf_len) != 0) {
-      char errbuf[64];
-      log_warn("[runner] failed to read stderr from %s: %s", argv[0], strerror_r(errno, errbuf, sizeof(errbuf)));
+      log_warn("[runner] failed to read stderr from %s: %s", argv[0], strerror(errno));
     }
   }
   close(stderr_pipe[0]);
+  stderr_pipe[0] = -1;
 
   for (;;) {
     pid_t waited = waitpid(pid, &status, 0);
@@ -229,15 +279,46 @@ static int exec_with_stdio(char *const argv[], const char *stdin_data, int has_m
       break;
     }
     if (waited < 0 && errno != EINTR) {
-      return -1;
+      err = -1;
+      goto err_cleanup;
     }
   }
 
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    return -1;
+    err = -1;
+    goto err_cleanup;
   }
 
-  return 0;
+  err = 0;
+
+err_cleanup:
+  if (fa_ready) {
+    posix_spawn_file_actions_destroy(&fa);
+  }
+  if (attr_ready) {
+    posix_spawnattr_destroy(&attr);
+  }
+  TUMGRD_FREE(memlimit_env);
+  TUMGRD_FREE(envp_storage);
+  if (stdin_pipe[0] >= 0) {
+    close(stdin_pipe[0]);
+  }
+  if (stdin_pipe[1] >= 0) {
+    close(stdin_pipe[1]);
+  }
+  if (stdout_pipe[0] >= 0) {
+    close(stdout_pipe[0]);
+  }
+  if (stdout_pipe[1] >= 0) {
+    close(stdout_pipe[1]);
+  }
+  if (stderr_pipe[0] >= 0) {
+    close(stderr_pipe[0]);
+  }
+  if (stderr_pipe[1] >= 0) {
+    close(stderr_pipe[1]);
+  }
+  return err;
 }
 
 static int run_tuctl_script(const struct tumgrd_node *node, const char *script, const char *success_marker) {
