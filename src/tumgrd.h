@@ -26,6 +26,9 @@ struct tumgrd_ctx {
 
 #define TUMGRD_IPDETECT_FWMARK 2
 
+/* IP 探测 HTTP 请求的 connect/send/recv 超时(秒) */
+#define TUMGRD_IPDETECT_TIMEOUT_S 5
+
 #define TUMGRD_STATUS_ACTIVE  "active"
 #define TUMGRD_STATUS_ERROR   "error"
 #define TUMGRD_STATUS_SYNCING "syncing"

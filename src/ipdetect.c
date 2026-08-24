@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -413,6 +414,22 @@ static int http_get_with_mark(const char *host, int port, const char *path, char
 
     if (setsockopt(sock, SOL_SOCKET, SO_MARK, &g_ipdetect_fwmark, sizeof(g_ipdetect_fwmark)) < 0) {
       log_error("[ipdetect] SO_MARK failed: %s (continuing without mark)", strerror(errno));
+    }
+
+    /*
+     * 必须设超时:阻塞 socket 上服务端"收下请求但不回包"会让 recv 永久挂起,
+     * 单线程 daemon 会整体冻死。Linux 上 SO_SNDTIMEO 同时约束阻塞 connect。
+     * 两个 setsockopt 独立调用:RCVTIMEO 是关键项,不能因前者失败被短路跳过。
+     */
+    {
+      struct timeval tv = {.tv_sec = TUMGRD_IPDETECT_TIMEOUT_S, .tv_usec = 0};
+
+      if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+        log_error("[ipdetect] SO_SNDTIMEO failed: %s", strerror(errno));
+      }
+      if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        log_error("[ipdetect] SO_RCVTIMEO failed: %s", strerror(errno));
+      }
     }
 
     if (connect(sock, rp->ai_addr, rp->ai_addrlen) == 0)
