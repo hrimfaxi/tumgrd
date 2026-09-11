@@ -151,8 +151,6 @@ cmd_register() {
 
   if [ -n "$memlimit" ]; then
     is_uint "$memlimit" || err "-memlimit must be an integer"
-  else
-    memlimit=0
   fi
 
   if [ -n "$lifetime" ]; then
@@ -165,7 +163,10 @@ cmd_register() {
   payload="$payload,\"server_port\":$server_port"
   payload="$payload,\"client_port\":$client_port"
   payload="$payload,\"psk\":\"$(json_escape "$psk")\""
-  payload="$payload,\"memlimit\":$memlimit"
+
+  if [ -n "$memlimit" ]; then
+    payload="$payload,\"memlimit\":$memlimit"
+  fi
 
   if [ -n "$description" ]; then
     payload="$payload,\"description\":\"$(json_escape "$description")\""
