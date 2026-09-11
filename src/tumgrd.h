@@ -29,6 +29,12 @@ struct tumgrd_ctx {
 /* IP 探测 HTTP 请求的 connect/send/recv 超时(秒) */
 #define TUMGRD_IPDETECT_TIMEOUT_S 5
 
+/* 子进程执行(tuctl_client/ktuctl)的 deadline(秒)：超时则强杀子进程组，本次 reconcile 记为失败 */
+#define TUMGRD_SUBPROC_TIMEOUT_S 90
+
+/* deadline 到期后重新武装 alarm 的间隔(秒)：保证之后每个阻塞 syscall 都能被打断 */
+#define TUMGRD_SUBPROC_TIMEOUT_RETRY_S 5
+
 #define TUMGRD_STATUS_ACTIVE  "active"
 #define TUMGRD_STATUS_ERROR   "error"
 #define TUMGRD_STATUS_SYNCING "syncing"

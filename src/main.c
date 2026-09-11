@@ -2,6 +2,7 @@
 #include "helper.h"
 #include "ipdetect.h"
 #include "log.h"
+#include "runner.h"
 #include "try.h"
 #include "tumgrd.h"
 #include "ubus_if.h"
@@ -179,6 +180,9 @@ int main(int argc, char **argv) {
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
   signal(SIGPIPE, SIG_IGN);
+
+  /* 子进程看门狗：防止 tuctl_client/ktuctl 卡住把单线程 daemon 永久冻死 */
+  tumgrd_runner_install_watchdog();
 
   try2(tumgrd_db_open(&ctx.db, ctx.cfg.db_path), "[main] open db failed: %s", ctx.cfg.db_path);
   db_opened = true;
